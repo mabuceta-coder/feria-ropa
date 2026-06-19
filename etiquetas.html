@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<title>Generador de etiquetas — Feria de ropa</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: #FBF7F2;
+    color: #2C2416;
+    padding: 24px;
+  }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  p.sub { color: #7A6E62; font-size: 14px; margin-bottom: 24px; }
+
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 12px;
+    background: #fff; border: 1px solid #E8E0D5;
+    border-radius: 12px; padding: 20px; margin-bottom: 24px;
+  }
+  .ctrl-group { display: flex; flex-direction: column; gap: 6px; }
+  .ctrl-group label { font-size: 12px; font-weight: 600; color: #7A6E62; letter-spacing: .5px; }
+  select, input[type=number] {
+    padding: 8px 12px; border-radius: 8px;
+    border: 1px solid #E8E0D5; background: #FBF7F2;
+    font-size: 14px; min-width: 140px;
+  }
+  .btn {
+    padding: 10px 20px; border-radius: 10px;
+    border: none; cursor: pointer;
+    font-weight: 600; font-size: 14px;
+  }
+  .btn-primary { background: #2C2416; color: #fff; }
+  .btn-print { background: #5A8FA3; color: #fff; }
+  .btn-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+
+  /* ── PRINT SHEET ── */
+  #sheet {
+    display: none;
+  }
+
+  @media screen {
+    #preview-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px;
+    }
+    #sheet {
+      display: block;
+      background: white;
+      border: 1px solid #E8E0D5;
+      border-radius: 12px;
+      padding: 16px;
+    }
+  }
+
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto 20px;
+    padding: 10mm;
+    background: white;
+    display: grid;
+    gap: 0;
+  }
+
+  /* Tamaño de etiqueta: ~62mm x 38mm — caben 3 columnas x 7 filas en A4 */
+  .label {
+    width: 62mm;
+    height: 40mm;
+    border: 1px dashed #ccc;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3mm 4mm 2mm;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .label-header {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  .label-duena {
+    font-size: 8pt;
+    font-weight: 700;
+    letter-spacing: .5px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: white;
+  }
+
+  .label-cat {
+    font-size: 7pt;
+    color: #7A6E62;
+    font-weight: 600;
+    text-align: right;
+    line-height: 1.2;
+  }
+
+  .label-qr {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 1mm 0;
+  }
+
+  .label-qr canvas, .label-qr img {
+    width: 20mm !important;
+    height: 20mm !important;
+  }
+
+  .label-footer {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  .label-id {
+    font-size: 6pt;
+    color: #aaa;
+  }
+
+  .label-precio {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  .precio-label {
+    font-size: 6pt;
+    color: #7A6E62;
+    margin-bottom: 1px;
+  }
+
+  .precio-valor {
+    font-size: 12pt;
+    font-weight: 700;
+    color: #2C2416;
+  }
+
+  .precio-blank {
+    width: 28mm;
+    height: 10mm;
+    border-bottom: 1.5px solid #2C2416;
+  }
+
+  .page-title {
+    text-align: center;
+    font-size: 9pt;
+    color: #7A6E62;
+    margin-bottom: 4mm;
+    letter-spacing: 1px;
+    font-weight: 600;
+  }
+
+  @media print {
+    body { background: white; padding: 0; }
+    .controls, #preview-header, h1, p.sub { display: none !important; }
+    #sheet { border: none !important; padding: 0 !important; border-radius: 0 !important; }
+    .page { margin: 0; page-break-after: always; }
+    .page:last-child { page-break-after: auto; }
+  }
+</style>
+</head>
+<body>
+
+<h1>🏷️ Etiquetas para la feria</h1>
+<p class="sub">Generá una hoja por categoría y dueña. Imprimí en cartón fino si podés.</p>
+
+<div class="controls">
+  <div class="ctrl-group">
+    <label>DUEÑA</label>
+    <select id="sel-duena">
+      <option value="Vanessa">Vanessa</option>
+      <option value="Mariana">Mariana</option>
+    </select>
+  </div>
+  <div class="ctrl-group">
+    <label>CATEGORÍA</label>
+    <select id="sel-cat">
+      <option value="jeans|Jeans|20000">Jeans — $20.000</option>
+      <option value="pantalon|Pantalón|20000">Pantalón — $20.000</option>
+      <option value="short|Short|12000">Short — $12.000</option>
+      <option value="remera|Remera|8000">Remera — $8.000</option>
+      <option value="top|Top|8000">Top — $8.000</option>
+      <option value="sweater|Sweater|15000">Sweater — $15.000</option>
+      <option value="buzo|Buzo|15000">Buzo — $15.000</option>
+      <option value="bikini|Bikini|12000">Bikini — $12.000</option>
+      <option value="abrigo|Abrigo|25000">Abrigo — $25.000</option>
+      <option value="vestido|Vestido|18000">Vestido — $18.000</option>
+      <option value="zapatilla|Zapatilla|22000">Zapatilla — $22.000</option>
+      <option value="bota|Bota|25000">Bota — $25.000</option>
+      <option value="especial|Especial ✨|">Especial (precio libre)</option>
+    </select>
+  </div>
+  <div class="ctrl-group">
+    <label>CANTIDAD DE ETIQUETAS</label>
+    <input type="number" id="inp-qty" value="21" min="1" max="210" />
+  </div>
+  <div class="ctrl-group">
+    <label>NÚMERO INICIAL</label>
+    <input type="number" id="inp-start" value="1" min="1" />
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="generarHoja()">Generar hoja</button>
+    <button class="btn btn-print" onclick="window.print()">🖨️ Imprimir / PDF</button>
+  </div>
+</div>
+
+<div id="preview-header" style="display:none">
+  <strong id="preview-title"></strong>
+  <button class="btn btn-print" onclick="window.print()">🖨️ Imprimir</button>
+</div>
+
+<div id="sheet"></div>
+
+<script>
+const DUENA_COLOR = { Vanessa: "#D4845A", Mariana: "#5A8FA3" };
+const COLS = 3;
+const ROWS_PER_PAGE = 7;
+const PER_PAGE = COLS * ROWS_PER_PAGE;
+
+async function qrDataURL(text, size) {
+  return new Promise((resolve, reject) => {
+    QRCode.toDataURL(text, { width: size, margin: 1, errorCorrectionLevel: 'M' }, (err, url) => {
+      if (err) reject(err); else resolve(url);
+    });
+  });
+}
+
+async function generarHoja() {
+  const duena = document.getElementById('sel-duena').value;
+  const catParts = document.getElementById('sel-cat').value.split('|');
+  const catId = catParts[0];
+  const catNombre = catParts[1];
+  const catPrecio = catParts[2] ? parseInt(catParts[2]) : null;
+  const qty = parseInt(document.getElementById('inp-qty').value);
+  const start = parseInt(document.getElementById('inp-start').value);
+  const color = DUENA_COLOR[duena];
+
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = '';
+
+  const totalPages = Math.ceil(qty / PER_PAGE);
+
+  for (let p = 0; p < totalPages; p++) {
+    const page = document.createElement('div');
+    page.className = 'page';
+    page.style.gridTemplateColumns = `repeat(${COLS}, 62mm)`;
+
+    const titleDiv = document.createElement('div');
+    titleDiv.className = 'page-title';
+    titleDiv.style.gridColumn = `1 / -1`;
+    titleDiv.textContent = `${catNombre.toUpperCase()} — ${duena.toUpperCase()}`;
+    page.appendChild(titleDiv);
+
+    const pageStart = p * PER_PAGE;
+    const pageEnd = Math.min(pageStart + PER_PAGE, qty);
+
+    for (let i = pageStart; i < pageEnd; i++) {
+      const num = start + i;
+      const id = `${duena.charAt(0)}${catId.substring(0,3).toUpperCase()}${String(num).padStart(3,'0')}`;
+      // QR data: DUENA|catId|precio (o vacío si especial)
+      const qrData = `${duena}|${catId}|${catPrecio || ''}`;
+
+      const label = document.createElement('div');
+      label.className = 'label';
+
+      // Header
+      const header = document.createElement('div');
+      header.className = 'label-header';
+
+      const duenaSpan = document.createElement('span');
+      duenaSpan.className = 'label-duena';
+      duenaSpan.style.background = color;
+      duenaSpan.textContent = duena.toUpperCase();
+
+      const catSpan = document.createElement('span');
+      catSpan.className = 'label-cat';
+      catSpan.textContent = catNombre;
+
+      header.appendChild(duenaSpan);
+      header.appendChild(catSpan);
+      label.appendChild(header);
+
+      // QR
+      const qrDiv = document.createElement('div');
+      qrDiv.className = 'label-qr';
+      try {
+        const dataUrl = await qrDataURL(qrData, 80);
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        qrDiv.appendChild(img);
+      } catch(e) {
+        qrDiv.textContent = '⚠️';
+      }
+      label.appendChild(qrDiv);
+
+      // Footer
+      const footer = document.createElement('div');
+      footer.className = 'label-footer';
+
+      const idSpan = document.createElement('span');
+      idSpan.className = 'label-id';
+      idSpan.textContent = id;
+
+      const precioDiv = document.createElement('div');
+      precioDiv.className = 'label-precio';
+
+      if (catPrecio) {
+        const lbl = document.createElement('div');
+        lbl.className = 'precio-label';
+        lbl.textContent = 'PRECIO';
+        const val = document.createElement('div');
+        val.className = 'precio-valor';
+        val.textContent = `$${catPrecio.toLocaleString('es-AR')}`;
+        precioDiv.appendChild(lbl);
+        precioDiv.appendChild(val);
+      } else {
+        const blank = document.createElement('div');
+        blank.className = 'precio-blank';
+        precioDiv.appendChild(blank);
+      }
+
+      footer.appendChild(idSpan);
+      footer.appendChild(precioDiv);
+      label.appendChild(footer);
+
+      page.appendChild(label);
+    }
+
+    // Rellenar celdas vacías en la última página
+    const filled = pageEnd - pageStart;
+    for (let k = filled; k < PER_PAGE && p === totalPages - 1; k++) {
+      const empty = document.createElement('div');
+      empty.className = 'label';
+      empty.style.borderColor = 'transparent';
+      page.appendChild(empty);
+    }
+
+    sheet.appendChild(page);
+  }
+
+  document.getElementById('preview-header').style.display = 'flex';
+  document.getElementById('preview-title').textContent =
+    `${qty} etiquetas · ${catNombre} · ${duena}`;
+
+  sheet.style.display = 'block';
+}
+</script>
+
+</body>
+</html>
