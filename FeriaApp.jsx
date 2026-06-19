@@ -817,4 +817,3 @@ function TabAdmin({ adminTab, setAdminTab, categorias, setCategorias, descuentos
     </div>
   );
 }
-}
