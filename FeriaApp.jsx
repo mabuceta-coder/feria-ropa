@@ -275,6 +275,34 @@ export default function FeriaApp() {
     );
   }
 
+  // ── Bootstrap: sin usuarios, mostrar admin directo ──
+  if (usuarios.length === 0) {
+    return (
+      <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Inter', system-ui", maxWidth: 480, margin: "0 auto", display: "flex", flexDirection: "column" }}>
+        <div style={{ background: C.admin, color: "#fff", padding: "14px 20px 10px" }}>
+          <div style={{ fontSize: 11, opacity: 0.8, letterSpacing: 1 }}>FERIA DE ROPA</div>
+          <div style={{ fontWeight: 700, fontSize: 17 }}>Configuración inicial</div>
+        </div>
+        <div style={{ padding: 20, overflowY: "auto" }}>
+          <p style={{ color: C.inkLight, fontSize: 14, marginBottom: 20 }}>
+            Antes de usar la app, configurá las dueñas, categorías, descuentos y vendedores.
+          </p>
+          <TabAdmin
+            adminTab={adminTab} setAdminTab={setAdminTab}
+            categorias={categorias} setCategorias={setCategorias}
+            descuentos={descuentos} setDescuentos={setDescuentos}
+            usuarios={usuarios} setUsuarios={setUsuarios}
+            duenas={duenas} setDuenas={setDuenas}
+            guardar={guardar} showToast={showToast}
+          />
+        </div>
+        {toast && (
+          <div style={{ position: "fixed", bottom: 40, left: "50%", transform: "translateX(-50%)", background: C.success, color: "#fff", padding: "10px 20px", borderRadius: 20, fontSize: 13, fontWeight: 600, zIndex: 2000 }}>{toast.msg}</div>
+        )}
+      </div>
+    );
+  }
+
   // ── Login ──
   if (!usuario || !usuarios.find(u => u.nombre === usuario)) {
     return (
@@ -282,21 +310,11 @@ export default function FeriaApp() {
         <div style={{ fontSize: 48, marginBottom: 8 }}>👗</div>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: C.ink, margin: "0 0 4px" }}>Feria de ropa</h1>
         <p style={{ color: C.inkLight, marginBottom: 40, fontSize: 14 }}>¿Quién sos?</p>
-        {usuarios.length === 0 ? (
-          <div style={{ textAlign: "center", padding: 24 }}>
-            <p style={{ color: C.danger, fontSize: 14, marginBottom: 16 }}>No hay usuarios configurados.</p>
-            <p style={{ color: C.inkLight, fontSize: 13 }}>Configurá los usuarios desde el panel Admin ingresando como <strong>admin</strong>.</p>
-            <button onClick={() => { setUsuario("admin"); localStorage.setItem("feria_usuario", "admin"); }} style={{ marginTop: 20, padding: "12px 32px", background: C.admin, color: "#fff", border: "none", borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
-              Entrar como Admin
-            </button>
-          </div>
-        ) : (
-          usuarios.map(u => (
-            <button key={u.nombre} onClick={() => { setUsuario(u.nombre); localStorage.setItem("feria_usuario", u.nombre); }} style={{ width: 240, padding: "16px 0", marginBottom: 16, background: u.color || C.ink, color: "#fff", border: "none", borderRadius: 14, fontSize: 18, fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
-              {u.nombre}
-            </button>
-          ))
-        )}
+        {usuarios.map(u => (
+          <button key={u.nombre} onClick={() => { setUsuario(u.nombre); localStorage.setItem("feria_usuario", u.nombre); }} style={{ width: 240, padding: "16px 0", marginBottom: 16, background: u.color || C.ink, color: "#fff", border: "none", borderRadius: 14, fontSize: 18, fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
+            {u.nombre}
+          </button>
+        ))}
       </div>
     );
   }
