@@ -131,6 +131,7 @@ export default function FeriaApp() {
 
   // Tabs
   const [tab, setTab] = useState("Cobro");
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Carrito
   const [carrito, setCarrito] = useState([]);
@@ -340,25 +341,67 @@ export default function FeriaApp() {
   }
 
   const adminMode = usuario === "admin" || isAdmin();
-  const tabs = adminMode ? ["Cobro", "Resumen", "Admin"] : ["Cobro", "Resumen"];
+  const menuItems = adminMode
+    ? [{ id: "Cobro", icon: "🛍️", label: "Cobrar" }, { id: "Resumen", icon: "📊", label: "Resumen y arqueo" }, { id: "Admin", icon: "⚙️", label: "Administración" }]
+    : [{ id: "Cobro", icon: "🛍️", label: "Cobrar" }, { id: "Resumen", icon: "📊", label: "Resumen y arqueo" }];
+
+  const headerColor = usuario === "admin" ? C.admin : (colorFor(usuario, usuarios) || C.ink);
 
   // ── Main UI ──
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Inter', system-ui", maxWidth: 480, margin: "0 auto", display: "flex", flexDirection: "column" }}>
-      {/* Header */}
-      <div style={{ background: usuario === "admin" ? C.admin : (colorFor(usuario, usuarios) || C.ink), color: "#fff", padding: "14px 20px 10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <div style={{ fontSize: 11, opacity: 0.8, letterSpacing: 1 }}>FERIA DE ROPA</div>
-          <div style={{ fontWeight: 700, fontSize: 17 }}>{usuario}</div>
+
+      {/* Drawer overlay */}
+      {drawerOpen && (
+        <div onClick={() => setDrawerOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 900 }} />
+      )}
+
+      {/* Drawer */}
+      <div style={{
+        position: "fixed", top: 0, left: 0, height: "100%", width: 260,
+        background: C.surface, zIndex: 1000,
+        transform: drawerOpen ? "translateX(0)" : "translateX(-100%)",
+        transition: "transform 0.25s ease",
+        display: "flex", flexDirection: "column",
+        boxShadow: drawerOpen ? "4px 0 20px rgba(0,0,0,0.15)" : "none"
+      }}>
+        {/* Drawer header */}
+        <div style={{ background: headerColor, padding: "20px 16px 16px", color: "#fff" }}>
+          <div style={{ fontSize: 11, opacity: 0.8, letterSpacing: 1, marginBottom: 2 }}>FERIA DE ROPA</div>
+          <div style={{ fontWeight: 700, fontSize: 20 }}>{usuario}</div>
         </div>
-        <button onClick={() => { setUsuario(null); localStorage.removeItem("feria_usuario"); }} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>Cambiar</button>
+        {/* Menu items */}
+        <div style={{ flex: 1, padding: "12px 0" }}>
+          {menuItems.map(item => (
+            <button key={item.id} onClick={() => { setTab(item.id); setDrawerOpen(false); }} style={{
+              width: "100%", padding: "14px 20px", border: "none", background: tab === item.id ? C.tag : "none",
+              display: "flex", alignItems: "center", gap: 12, cursor: "pointer",
+              borderLeft: tab === item.id ? `3px solid ${headerColor}` : "3px solid transparent",
+              fontSize: 15, fontWeight: tab === item.id ? 700 : 400,
+              color: tab === item.id ? headerColor : C.ink,
+            }}>
+              <span style={{ fontSize: 20 }}>{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
+        </div>
+        {/* Cambiar usuario */}
+        <div style={{ padding: "12px 16px", borderTop: `1px solid ${C.border}` }}>
+          <button onClick={() => { setUsuario(null); localStorage.removeItem("feria_usuario"); setDrawerOpen(false); }} style={{
+            width: "100%", padding: "10px 0", background: C.tag, border: "none",
+            borderRadius: 10, color: C.inkLight, fontSize: 13, fontWeight: 600, cursor: "pointer"
+          }}>
+            Cambiar usuario
+          </button>
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: "flex", background: C.surface, borderBottom: `1px solid ${C.border}` }}>
-        {tabs.map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: "12px 0", border: "none", background: "none", fontSize: 13, fontWeight: tab === t ? 700 : 400, color: tab === t ? (usuario === "admin" ? C.admin : colorFor(usuario, usuarios)) : C.inkLight, borderBottom: tab === t ? `2px solid ${usuario === "admin" ? C.admin : colorFor(usuario, usuarios)}` : "2px solid transparent", cursor: "pointer" }}>{t}</button>
-        ))}
+      {/* Header */}
+      <div style={{ background: headerColor, color: "#fff", padding: "14px 20px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+        <button onClick={() => setDrawerOpen(d => !d)} style={{ background: "none", border: "none", color: "#fff", fontSize: 22, cursor: "pointer", padding: "0 8px 0 0", lineHeight: 1 }}>☰</button>
+        <div style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>
+          {menuItems.find(m => m.id === tab)?.icon} {menuItems.find(m => m.id === tab)?.label}
+        </div>
       </div>
 
       {/* Content */}
@@ -397,7 +440,7 @@ export default function FeriaApp() {
       {scanning && <QRScanner onScan={handleScan} onClose={() => setScanning(false)} />}
 
       {toast && (
-        <div style={{ position: "fixed", bottom: 80, left: "50%", transform: "translateX(-50%)", background: toast.type === "err" ? C.danger : toast.type === "warn" ? "#E67E22" : C.success, color: "#fff", padding: "10px 20px", borderRadius: 20, fontSize: 13, fontWeight: 600, zIndex: 2000, boxShadow: "0 4px 16px rgba(0,0,0,0.2)", whiteSpace: "nowrap" }}>{toast.msg}</div>
+        <div style={{ position: "fixed", bottom: 40, left: "50%", transform: "translateX(-50%)", background: toast.type === "err" ? C.danger : toast.type === "warn" ? "#E67E22" : C.success, color: "#fff", padding: "10px 20px", borderRadius: 20, fontSize: 13, fontWeight: 600, zIndex: 2000, boxShadow: "0 4px 16px rgba(0,0,0,0.2)", whiteSpace: "nowrap" }}>{toast.msg}</div>
       )}
     </div>
   );
