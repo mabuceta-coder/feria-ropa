@@ -132,6 +132,9 @@ export default function FeriaApp() {
   // Tabs
   const [tab, setTab] = useState("Cobro");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [scanMode, setScanMode] = useState("venta"); // "venta" | "devolucion" | "cambio"
+  const [devolucionData, setDevolucionData] = useState(null);
+  const [cambioNuevaPrenda, setCambioNuevaPrenda] = useState(null);
 
   // Carrito
   const [carrito, setCarrito] = useState([]);
@@ -198,21 +201,110 @@ export default function FeriaApp() {
 
   // ── QR scan ──
   const handleScan = useCallback((data) => {
+    if (scanMode === "devolucion") { handleScanDevolucion(data); return; }
+    if (scanMode === "cambio") { handleScanCambio(data); return; }
     setScanning(false);
     const parts = data.split("|");
     if (parts.length < 2) { showToast("QR inválido", "err"); return; }
-    const [duena, catId, precioStr] = parts;
+    const [duena, catId, precioStr, prendaId] = parts;
     const cat = categorias.find(c => c.id === catId);
     if (!cat) { showToast("Categoría no encontrada", "err"); return; }
     const precio = precioStr ? parseInt(precioStr) : cat.precio;
     if (!precio) { showToast("Prenda especial — ingresá el precio manualmente", "warn"); return; }
-    agregarAlCarrito(duena, cat, precio);
-  }, [categorias]);
+    // Verificar que no esté ya en el carrito
+    if (prendaId && carrito.find(i => i.prendaId === prendaId)) {
+      showToast("Esta prenda ya está en el carrito", "warn"); return;
+    }
+    agregarAlCarrito(duena, cat, precio, prendaId);
+  }, [categorias, scanMode, carrito]);
 
-  const agregarAlCarrito = (duena, cat, precio) => {
-    setCarrito(prev => [...prev, { id: Date.now() + Math.random(), duena, categoria: cat.nombre, catId: cat.id, precio }]);
+  const agregarAlCarrito = (duena, cat, precio, prendaId = null) => {
+    setCarrito(prev => [...prev, { id: Date.now() + Math.random(), duena, categoria: cat.nombre, catId: cat.id, precio, prendaId }]);
     setPrecioEditado(null);
     showToast(`${cat.nombre} de ${duena} agregado`);
+  };
+
+  // ── Devolución/Cambio ──
+  const handleScanDevolucion = useCallback(async (data) => {
+    setScanning(false);
+    const parts = data.split("|");
+    const prendaId = parts[3];
+    if (!prendaId) { showToast("Esta etiqueta no tiene ID — formato viejo", "err"); return; }
+    // Buscar en ventas del día
+    let prendaEncontrada = null;
+    let ventaOrigen = null;
+    for (const v of ventas) {
+      const item = v.items?.find(i => i.prendaId === prendaId);
+      if (item) { prendaEncontrada = item; ventaOrigen = v; break; }
+    }
+    if (!prendaEncontrada) { showToast("Prenda no encontrada en ventas de hoy", "err"); return; }
+    setDevolucionData({ prenda: prendaEncontrada, venta: ventaOrigen });
+  }, [ventas]);
+
+  const handleScanCambio = useCallback(async (data) => {
+    setScanning(false);
+    const parts = data.split("|");
+    const [duena, catId, precioStr, prendaId] = parts;
+    const cat = categorias.find(c => c.id === catId);
+    if (!cat) { showToast("Categoría no encontrada", "err"); return; }
+    const precio = precioStr ? parseInt(precioStr) : cat.precio;
+    setCambioNuevaPrenda({ duena, cat, precio, prendaId });
+    setScanMode("venta");
+  }, [categorias]);
+
+  const confirmarDevolucion = async (metodoDev) => {
+    if (!devolucionData) return;
+    const { prenda, venta } = devolucionData;
+    const trx = {
+      tipo: "devolucion",
+      fecha: new Date().toISOString().split("T")[0],
+      timestamp: Date.now(),
+      vendedor: usuario,
+      metodo: metodoDev,
+      prendaId: prenda.prendaId,
+      categoria: prenda.categoria,
+      duena: prenda.duena,
+      montoDevuelto: prenda.precioFinal,
+      ventaOrigenId: venta.id,
+      porDuena: { [prenda.duena]: -prenda.precioFinal },
+      totalFinal: -prenda.precioFinal,
+    };
+    if (db) await addDoc(collection(db, "ventas"), trx);
+    showToast(`Devolución registrada: ${fmt(prenda.precioFinal)}`);
+    setDevolucionData(null);
+    setScanMode("venta");
+    setTab("Resumen");
+  };
+
+  const confirmarCambio = async () => {
+    if (!devolucionData || !cambioNuevaPrenda) return;
+    const { prenda: prendaVieja, venta } = devolucionData;
+    const diferencia = cambioNuevaPrenda.precio - prendaVieja.precioFinal;
+    const trx = {
+      tipo: "cambio",
+      fecha: new Date().toISOString().split("T")[0],
+      timestamp: Date.now(),
+      vendedor: usuario,
+      prendaDevueltaId: prendaVieja.prendaId,
+      prendaDevuelta: prendaVieja.categoria,
+      duenaDevuelta: prendaVieja.duena,
+      prendaNuevaId: cambioNuevaPrenda.prendaId,
+      prendaNueva: cambioNuevaPrenda.cat.nombre,
+      duenaNueva: cambioNuevaPrenda.duena,
+      diferencia,
+      ventaOrigenId: venta.id,
+      porDuena: {
+        [prendaVieja.duena]: -prendaVieja.precioFinal,
+        [cambioNuevaPrenda.duena]: cambioNuevaPrenda.precio,
+      },
+      totalFinal: diferencia,
+    };
+    if (db) await addDoc(collection(db, "ventas"), trx);
+    showToast(`Cambio registrado${diferencia > 0 ? ` — cliente paga ${fmt(diferencia)} extra` : ""}`);
+    setDevolucionData(null);
+    setCambioNuevaPrenda(null);
+    setScanMode("venta");
+    setTab("Resumen");
   };
 
   // ── Cálculos ──
@@ -417,6 +509,7 @@ export default function FeriaApp() {
             itemsProrateados={itemsProrateados} resumenCarrito={resumenCarrito}
             metodoPago={metodoPago} setMetodoPago={setMetodoPago}
             registrarVenta={registrarVenta} setScanning={setScanning}
+            setScanMode={setScanMode} isAdmin={adminMode}
             manualMode={manualMode} setManualMode={setManualMode}
             manualDuena={manualDuena} setManualDuena={setManualDuena}
             manualCat={manualCat} setManualCat={setManualCat}
@@ -437,7 +530,77 @@ export default function FeriaApp() {
         )}
       </div>
 
-      {scanning && <QRScanner onScan={handleScan} onClose={() => setScanning(false)} />}
+      {/* ── Devolución modal ── */}
+      {devolucionData && !cambioNuevaPrenda && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 800, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+          <div style={{ background: C.surface, borderRadius: "20px 20px 0 0", padding: 24, width: "100%", maxWidth: 480 }}>
+            <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Devolución</p>
+            <p style={{ color: C.inkLight, fontSize: 13, marginBottom: 16 }}>Prenda encontrada en venta de hoy</p>
+            <div style={{ background: C.tag, borderRadius: 10, padding: "12px 14px", marginBottom: 20 }}>
+              <div style={{ fontWeight: 600 }}>{devolucionData.prenda.categoria}</div>
+              <div style={{ fontSize: 13, color: C.inkLight }}>{devolucionData.prenda.duena}</div>
+              <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>{fmt(devolucionData.prenda.precioFinal)}</div>
+              <div style={{ fontSize: 11, color: C.inkLight, marginTop: 2 }}>Pagado originalmente · {devolucionData.venta.metodo}</div>
+            </div>
+            <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>¿Qué hacemos?</p>
+            <button onClick={() => { setScanMode("cambio"); setScanning(true); }} style={{ width: "100%", padding: "12px 0", background: C.ink, color: "#fff", border: "none", borderRadius: 12, fontWeight: 600, fontSize: 14, cursor: "pointer", marginBottom: 8 }}>
+              📷 Escanear prenda de cambio
+            </button>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <button onClick={() => confirmarDevolucion("efectivo")} style={{ flex: 1, padding: "10px 0", background: C.danger, color: "#fff", border: "none", borderRadius: 12, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                💵 Devolver efectivo
+              </button>
+              <button onClick={() => confirmarDevolucion("transferencia")} style={{ flex: 1, padding: "10px 0", background: C.danger, color: "#fff", border: "none", borderRadius: 12, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                📲 Devolver transfer
+              </button>
+            </div>
+            <button onClick={() => { setDevolucionData(null); setScanMode("venta"); }} style={{ width: "100%", padding: "10px 0", background: "none", border: "none", color: C.inkLight, fontSize: 13, cursor: "pointer" }}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Cambio confirmación ── */}
+      {devolucionData && cambioNuevaPrenda && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 800, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+          <div style={{ background: C.surface, borderRadius: "20px 20px 0 0", padding: 24, width: "100%", maxWidth: 480 }}>
+            <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 16 }}>Confirmar cambio</p>
+            <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+              <div style={{ flex: 1, background: "#FFF0F0", borderRadius: 10, padding: "10px 12px" }}>
+                <div style={{ fontSize: 11, color: C.danger, fontWeight: 600, marginBottom: 2 }}>DEVUELVE</div>
+                <div style={{ fontWeight: 600 }}>{devolucionData.prenda.categoria}</div>
+                <div style={{ fontSize: 12, color: C.inkLight }}>{devolucionData.prenda.duena}</div>
+                <div style={{ fontWeight: 700 }}>{fmt(devolucionData.prenda.precioFinal)}</div>
+              </div>
+              <div style={{ flex: 1, background: "#F0FFF4", borderRadius: 10, padding: "10px 12px" }}>
+                <div style={{ fontSize: 11, color: C.success, fontWeight: 600, marginBottom: 2 }}>SE LLEVA</div>
+                <div style={{ fontWeight: 600 }}>{cambioNuevaPrenda.cat.nombre}</div>
+                <div style={{ fontSize: 12, color: C.inkLight }}>{cambioNuevaPrenda.duena}</div>
+                <div style={{ fontWeight: 700 }}>{fmt(cambioNuevaPrenda.precio)}</div>
+              </div>
+            </div>
+            {cambioNuevaPrenda.precio - devolucionData.prenda.precioFinal > 0 && (
+              <div style={{ background: C.tag, borderRadius: 10, padding: "10px 14px", marginBottom: 16, textAlign: "center" }}>
+                <span style={{ fontWeight: 600 }}>Cliente paga {fmt(cambioNuevaPrenda.precio - devolucionData.prenda.precioFinal)} extra</span>
+              </div>
+            )}
+            {cambioNuevaPrenda.precio - devolucionData.prenda.precioFinal < 0 && (
+              <div style={{ background: "#FFF3E0", borderRadius: 10, padding: "10px 14px", marginBottom: 16, textAlign: "center" }}>
+                <span style={{ fontWeight: 600 }}>Diferencia a favor del cliente: {fmt(devolucionData.prenda.precioFinal - cambioNuevaPrenda.precio)}</span>
+              </div>
+            )}
+            <button onClick={confirmarCambio} style={{ width: "100%", padding: "14px 0", background: C.success, color: "#fff", border: "none", borderRadius: 12, fontWeight: 600, fontSize: 15, cursor: "pointer", marginBottom: 8 }}>
+              ✓ Confirmar cambio
+            </button>
+            <button onClick={() => setCambioNuevaPrenda(null)} style={{ width: "100%", padding: "10px 0", background: "none", border: "none", color: C.inkLight, fontSize: 13, cursor: "pointer" }}>
+              Escanear otra prenda
+            </button>
+          </div>
+        </div>
+      )}
+
+      {scanning && <QRScanner onScan={handleScan} onClose={() => { setScanning(false); setScanMode("venta"); }} />}
 
       {toast && (
         <div style={{ position: "fixed", bottom: 40, left: "50%", transform: "translateX(-50%)", background: toast.type === "err" ? C.danger : toast.type === "warn" ? "#E67E22" : C.success, color: "#fff", padding: "10px 20px", borderRadius: 20, fontSize: 13, fontWeight: 600, zIndex: 2000, boxShadow: "0 4px 16px rgba(0,0,0,0.2)", whiteSpace: "nowrap" }}>{toast.msg}</div>
@@ -447,7 +610,7 @@ export default function FeriaApp() {
 }
 
 // ── TAB COBRO ────────────────────────────────────────────────────────────────
-function TabCobro({ carrito, setCarrito, categorias, duenas, totalOriginal, pctAuto, totalConDescAuto, precioFinal, precioEditado, setPrecioEditado, pctReal, descuentoTotal, itemsProrateados, resumenCarrito, metodoPago, setMetodoPago, registrarVenta, setScanning, manualMode, setManualMode, manualDuena, setManualDuena, manualCat, setManualCat, manualPrecio, setManualPrecio, agregarAlCarrito, colorFor }) {
+function TabCobro({ carrito, setCarrito, categorias, duenas, totalOriginal, pctAuto, totalConDescAuto, precioFinal, precioEditado, setPrecioEditado, pctReal, descuentoTotal, itemsProrateados, resumenCarrito, metodoPago, setMetodoPago, registrarVenta, setScanning, setScanMode, isAdmin, manualMode, setManualMode, manualDuena, setManualDuena, manualCat, setManualCat, manualPrecio, setManualPrecio, agregarAlCarrito, colorFor }) {
   const catSeleccionada = categorias.find(c => c.id === manualCat);
 
   const agregarManual = () => {
@@ -461,10 +624,15 @@ function TabCobro({ carrito, setCarrito, categorias, duenas, totalOriginal, pctA
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: isAdmin ? 10 : 20, flexWrap: "wrap" }}>
         <Btn onClick={() => setScanning(true)} style={{ flex: 1, background: C.ink }}>📷 Escanear QR</Btn>
         <Btn onClick={() => setManualMode(m => !m)} style={{ flex: 1, background: manualMode ? C.accent : C.surface, color: manualMode ? "#fff" : C.ink, border: `1px solid ${C.border}` }}>✏️ Manual</Btn>
       </div>
+      {isAdmin && (
+        <button onClick={() => { setScanMode("devolucion"); setScanning(true); }} style={{ width: "100%", padding: "9px 0", marginBottom: 16, background: "none", border: `1px solid ${C.danger}`, borderRadius: 10, color: C.danger, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          ↩️ Registrar devolución / cambio
+        </button>
+      )}
 
       {manualMode && (
         <Card style={{ marginBottom: 16 }}>
