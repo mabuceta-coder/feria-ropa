@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+ import { useState, useEffect, useRef, useCallback } from "react";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc, addDoc, collection, onSnapshot, query, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
@@ -951,8 +951,7 @@ function TabAdmin({ adminTab, setAdminTab, categorias, setCategorias, descuentos
           <p style={{ fontSize: 13, color: C.inkLight, marginBottom: 12 }}>Nombre de la categoría y precio base. Dejá el precio vacío para prendas de precio libre.</p>
           {localCats.map((cat, i) => (
             <Card key={cat.id} style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
-              <input value={cat.nombre} placeholder="Nombre" onChange={e => { const n = [...localCats]; n[i] = { ...n[i], nombre: e.target.value }; setLocalCats(n); }} style={{ ...inputStyle, flex: 2 }} />
-              <input type="number" placeholder="Precio" value={cat.precio || ""} onChange={e => { const n = [...localCats]; n[i] = { ...n[i], precio: e.target.value ? parseInt(e.target.value) : null }; setLocalCats(n); }} style={{ ...inputStyle, width: 100, textAlign: "right" }} />
+              <input value={cat.nombre} placeholder="Nombre de la categoría" onChange={e => { const n = [...localCats]; n[i] = { ...n[i], nombre: e.target.value }; setLocalCats(n); }} style={{ ...inputStyle, flex: 1 }} />
               <button onClick={() => setLocalCats(c => c.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: C.danger, fontSize: 20, cursor: "pointer", flexShrink: 0 }}>✕</button>
             </Card>
           ))}
