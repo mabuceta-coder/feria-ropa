@@ -209,8 +209,8 @@ export default function FeriaApp() {
     const [duena, catId, precioStr, prendaId] = parts;
     const cat = categorias.find(c => c.id === catId);
     if (!cat) { showToast("Categoría no encontrada", "err"); return; }
-    const precio = precioStr ? parseInt(precioStr) : cat.precio;
-    if (!precio) { showToast("Prenda especial — ingresá el precio manualmente", "warn"); return; }
+    const precio = precioStr ? parseInt(precioStr) : null;
+    if (!precio) { showToast("QR sin precio — usá modo manual", "warn"); return; }
     // Verificar que no esté ya en el carrito
     if (prendaId && carrito.find(i => i.prendaId === prendaId)) {
       showToast("Esta prenda ya está en el carrito", "warn"); return;
@@ -615,7 +615,7 @@ function TabCobro({ carrito, setCarrito, categorias, duenas, totalOriginal, pctA
 
   const agregarManual = () => {
     if (!catSeleccionada || !manualDuena) return;
-    const precio = catSeleccionada.precio || (manualPrecio ? parseInt(manualPrecio) : null);
+    const precio = manualPrecio ? parseInt(manualPrecio) : null;
     if (!precio) return;
     agregarAlCarrito(manualDuena, catSeleccionada, precio);
     setManualMode(false);
@@ -646,12 +646,10 @@ function TabCobro({ carrito, setCarrito, categorias, duenas, totalOriginal, pctA
           <select value={manualCat} onChange={e => setManualCat(e.target.value)} style={{ ...inputStyle, marginBottom: 10 }}>
             <option value="">Seleccioná categoría...</option>
             {categorias.map(c => (
-              <option key={c.id} value={c.id}>{c.nombre}{c.precio ? ` — ${fmt(c.precio)}` : " — precio especial"}</option>
+              <option key={c.id} value={c.id}>{c.nombre}</option>
             ))}
           </select>
-          {catSeleccionada && !catSeleccionada.precio && (
-            <input type="number" placeholder="Precio especial" value={manualPrecio} onChange={e => setManualPrecio(e.target.value)} style={{ ...inputStyle, marginBottom: 10 }} />
-          )}
+          <input type="number" placeholder="Precio de la prenda" value={manualPrecio} onChange={e => setManualPrecio(e.target.value)} style={{ ...inputStyle, marginBottom: 10 }} />
           <Btn onClick={agregarManual} style={{ width: "100%" }} disabled={!catSeleccionada || !manualDuena}>Agregar al carrito</Btn>
         </Card>
       )}
