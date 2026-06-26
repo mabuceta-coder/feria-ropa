@@ -1,4 +1,4 @@
- import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc, addDoc, collection, onSnapshot, query, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
@@ -948,14 +948,31 @@ function TabAdmin({ adminTab, setAdminTab, categorias, setCategorias, descuentos
       {/* CATEGORÍAS */}
       {adminTab === "categorias" && (
         <>
-          <p style={{ fontSize: 13, color: C.inkLight, marginBottom: 12 }}>Nombre de la categoría y precio base. Dejá el precio vacío para prendas de precio libre.</p>
+          <p style={{ fontSize: 13, color: C.inkLight, marginBottom: 12 }}>
+            Cada categoría tiene variantes con su precio. Las variantes aparecen como opciones rápidas en el generador de etiquetas.
+          </p>
           {localCats.map((cat, i) => (
-            <Card key={cat.id} style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
-              <input value={cat.nombre} placeholder="Nombre de la categoría" onChange={e => { const n = [...localCats]; n[i] = { ...n[i], nombre: e.target.value }; setLocalCats(n); }} style={{ ...inputStyle, flex: 1 }} />
-              <button onClick={() => setLocalCats(c => c.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: C.danger, fontSize: 20, cursor: "pointer", flexShrink: 0 }}>✕</button>
+            <Card key={cat.id} style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <input value={cat.nombre} placeholder="Nombre de la categoría" onChange={e => { const n = [...localCats]; n[i] = { ...n[i], nombre: e.target.value }; setLocalCats(n); }} style={{ ...inputStyle, flex: 1 }} />
+                <button onClick={() => setLocalCats(c => c.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: C.danger, fontSize: 20, cursor: "pointer", flexShrink: 0 }}>✕</button>
+              </div>
+              <div style={{ paddingLeft: 8, borderLeft: `2px solid ${C.border}` }}>
+                {(cat.variantes || []).map((v, j) => (
+                  <div key={j} style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "center" }}>
+                    <input value={v.nombre} placeholder="ej: Estándar" onChange={e => { const n = [...localCats]; n[i].variantes[j] = { ...v, nombre: e.target.value }; setLocalCats(n); }} style={{ ...inputStyle, flex: 1 }} />
+                    <span style={{ color: C.inkLight, fontSize: 13 }}>$</span>
+                    <input type="number" value={v.precio || ""} placeholder="Precio" onChange={e => { const n = [...localCats]; n[i].variantes[j] = { ...v, precio: e.target.value ? parseInt(e.target.value) : null }; setLocalCats(n); }} style={{ ...inputStyle, width: 110, textAlign: "right" }} />
+                    <button onClick={() => { const n = [...localCats]; n[i].variantes = n[i].variantes.filter((_, k) => k !== j); setLocalCats(n); }} style={{ background: "none", border: "none", color: C.danger, fontSize: 16, cursor: "pointer" }}>✕</button>
+                  </div>
+                ))}
+                <button onClick={() => { const n = [...localCats]; if (!n[i].variantes) n[i].variantes = []; n[i].variantes.push({ nombre: "", precio: null }); setLocalCats(n); }} style={{ fontSize: 12, color: C.inkLight, background: "none", border: `1px dashed ${C.border}`, borderRadius: 6, padding: "4px 10px", cursor: "pointer", marginTop: 2 }}>
+                  + variante
+                </button>
+              </div>
             </Card>
           ))}
-          <button onClick={() => setLocalCats(c => [...c, { id: `cat_${Date.now()}`, nombre: "", precio: null }])} style={{ width: "100%", padding: "10px 0", background: "none", border: `1px dashed ${C.border}`, borderRadius: 10, color: C.inkLight, fontSize: 13, cursor: "pointer", marginBottom: 12 }}>+ Agregar categoría</button>
+          <button onClick={() => setLocalCats(c => [...c, { id: `cat_${Date.now()}`, nombre: "", variantes: [{ nombre: "Estándar", precio: null }, { nombre: "Premium", precio: null }, { nombre: "Nuevo", precio: null }] }])} style={{ width: "100%", padding: "10px 0", background: "none", border: `1px dashed ${C.border}`, borderRadius: 10, color: C.inkLight, fontSize: 13, cursor: "pointer", marginBottom: 12 }}>+ Agregar categoría</button>
           <Btn onClick={() => save("categorias", localCats, setCategorias)} style={{ width: "100%" }}>Guardar categorías</Btn>
         </>
       )}
