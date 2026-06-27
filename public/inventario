@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Inventario — Feria de ropa</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyAEvubBsurEQrK-xgKhx5X74n_qJWHMdB0",
+    authDomain: "feria-ropa-d5cf7.firebaseapp.com",
+    projectId: "feria-ropa-d5cf7",
+    storageBucket: "feria-ropa-d5cf7.firebasestorage.app",
+    messagingSenderId: "794936729041",
+    appId: "1:794936729041:web:bf274e0ff7aeeaa9d314f0",
+  };
+
+  const app = initializeApp(FIREBASE_CONFIG);
+  const db = getFirestore(app);
+  const FILAS_EXTRA = 8;
+
+  let _categorias = [];
+  let _duenas = [];
+
+  async function cargar() {
+    try {
+      const [catDoc, duenasDoc] = await Promise.all([
+        getDoc(doc(db, "config", "categorias")),
+        getDoc(doc(db, "config", "duenas")),
+      ]);
+      _categorias = catDoc.exists() ? catDoc.data().items || [] : [];
+      _duenas = duenasDoc.exists() ? duenasDoc.data().items || [] : [];
+      renderPreview(_categorias, _duenas);
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("contenido").style.display = "block";
+    } catch(e) {
+      document.getElementById("loading").textContent = "Error al conectar con Firebase.";
+    }
+  }
+
+  // ── Preview en pantalla ───────────────────────────────────────────────────
+  function renderPreview(categorias, duenas) {
+    const fecha = new Date().toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric" });
+    const wrap = document.getElementById("tablas-wrap");
+    wrap.innerHTML = "";
+
+    duenas.forEach((duena, di) => {
+      const section = document.createElement("div");
+      section.className = "hoja-section" + (di > 0 ? " page-break" : "");
+
+      section.innerHTML = `<div class="hoja-title">
+        <span class="hoja-inicial" style="background:${duena.color||'#2C2416'}">${duena.nombre.charAt(0)}</span>
+        <div>
+          <h2>${duena.nombre}</h2>
+          <p>Inventario de prendas · ${fecha}</p>
+        </div>
+      </div>`;
+
+      const table = document.createElement("table");
+      let html = `<thead><tr>
+        <th>Categoría</th><th>Variante</th><th>Precio</th><th class="th-qty">Cantidad</th>
+      </tr></thead><tbody>`;
+
+      categorias.forEach(cat => {
+        const variantes = (cat.variantes || []).filter(v => v.nombre) || [{ nombre: "—", precio: null }];
+        variantes.forEach((v, vi) => {
+          html += `<tr>
+            ${vi === 0 ? `<td class="cat-cell" rowspan="${variantes.length}">${cat.nombre}</td>` : ""}
+            <td class="var-cell">${v.nombre}</td>
+            <td class="precio-cell">${v.precio ? "$" + v.precio.toLocaleString("es-AR") : "—"}</td>
+            <td class="qty-cell"></td>
+          </tr>`;
+        });
+      });
+
+      // Filas en blanco
+      html += `<tr><td colspan="4" class="sep-row"></td></tr>`;
+      for (let i = 0; i < FILAS_EXTRA; i++) {
+        html += `<tr class="fila-extra"><td class="cat-cell"></td><td class="var-cell"></td><td class="precio-cell"></td><td class="qty-cell"></td></tr>`;
+      }
+
+      html += "</tbody>";
+      table.innerHTML = html;
+      section.appendChild(table);
+      wrap.appendChild(section);
+    });
+  }
+
+  // ── Generar PDF con jsPDF ─────────────────────────────────────────────────
+  window.descargarPDF = function() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const fecha = new Date().toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric" });
+
+    _duenas.forEach((duena, di) => {
+      if (di > 0) doc.addPage();
+
+      // Header
+      doc.setFillColor(44, 36, 22);
+      doc.rect(0, 0, 210, 18, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.text(`Inventario — ${duena.nombre}`, 14, 11);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Feria de ropa · ${fecha}`, 14, 16);
+      doc.setTextColor(44, 36, 22);
+
+      // Armar filas
+      const body = [];
+      _categorias.forEach(cat => {
+        const variantes = (cat.variantes || []).filter(v => v.nombre);
+        if (variantes.length === 0) variantes.push({ nombre: "—", precio: null });
+        variantes.forEach((v, vi) => {
+          body.push([
+            vi === 0 ? cat.nombre : "",
+            v.nombre,
+            v.precio ? `$${v.precio.toLocaleString("es-AR")}` : "—",
+            ""
+          ]);
+        });
+      });
+
+      // Filas en blanco
+      body.push(["", "", "", ""]);
+      for (let i = 0; i < FILAS_EXTRA; i++) {
+        body.push(["", "", "", ""]);
+      }
+
+      doc.autoTable({
+        startY: 22,
+        head: [["Categoría", "Variante", "Precio", "Cantidad"]],
+        body,
+        theme: "grid",
+        headStyles: {
+          fillColor: [44, 36, 22],
+          textColor: 255,
+          fontStyle: "bold",
+          fontSize: 10,
+        },
+        columnStyles: {
+          0: { cellWidth: 50, fontStyle: "bold" },
+          1: { cellWidth: 45, textColor: [90, 74, 154] },
+          2: { cellWidth: 40, halign: "right" },
+          3: { cellWidth: 40, halign: "center" },
+        },
+        bodyStyles: { fontSize: 10, minCellHeight: 8 },
+        alternateRowStyles: { fillColor: [253, 250, 247] },
+        margin: { left: 14, right: 14 },
+        didParseCell: function(data) {
+          // Separar filas vacías visualmente
+          if (data.row.index === _categorias.reduce((s, c) => s + Math.max(1, (c.variantes||[]).filter(v=>v.nombre).length), 0)) {
+            data.cell.styles.fillColor = [232, 224, 213];
+            data.cell.styles.minCellHeight = 3;
+          }
+        }
+      });
+    });
+
+    doc.save(`inventario-feria-${new Date().toISOString().split("T")[0]}.pdf`);
+  };
+
+  cargar();
+</script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #FBF7F2; color: #2C2416; padding: 24px; max-width: 800px; }
+  #loading { color: #7A6E62; font-size: 14px; padding: 40px 0; }
+  #contenido { display: none; }
+
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+  .toolbar h1 { font-size: 22px; font-weight: 700; }
+  .toolbar p { font-size: 13px; color: #7A6E62; margin-top: 2px; }
+  .btn-pdf { padding: 12px 24px; background: #2C2416; color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .btn-pdf:hover { background: #4A3C2C; }
+
+  .hoja-section { margin-bottom: 40px; }
+  .page-break { border-top: 2px dashed #E8E0D5; padding-top: 32px; }
+  .hoja-title { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+  .hoja-inicial { width: 40px; height: 40px; border-radius: 50%; color: white; font-size: 20px; font-weight: 900; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .hoja-title h2 { font-size: 18px; font-weight: 700; }
+  .hoja-title p { font-size: 12px; color: #7A6E62; }
+
+  table { width: 100%; border-collapse: collapse; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06); margin-bottom: 12px; }
+  thead tr { background: #2C2416; color: white; }
+  th { padding: 10px 12px; font-size: 11px; font-weight: 700; letter-spacing: .5px; text-align: left; }
+  .th-qty { text-align: center; width: 100px; }
+  td { padding: 7px 12px; border-bottom: 1px solid #F0EAE1; font-size: 13px; vertical-align: middle; }
+  .cat-cell { font-weight: 700; background: #FDFAF7; border-right: 2px solid #E8E0D5; vertical-align: top; padding-top: 10px; width: 130px; }
+  .var-cell { color: #5A4A9A; font-size: 12px; width: 120px; }
+  .precio-cell { font-weight: 600; text-align: right; border-right: 1px solid #E8E0D5; width: 110px; }
+  .qty-cell { text-align: center; width: 100px; }
+  .sep-row { height: 6px; background: #E8E0D5; }
+  .fila-extra td { height: 26px; background: #FAFAFA; }
+  .fila-extra td.cat-cell { background: #F5F5F5; }
+
+  @media print {
+    body { background: white; padding: 0; max-width: none; }
+    .toolbar .btn-pdf { display: none; }
+    .hoja-section { page-break-after: always; }
+    .hoja-section:last-child { page-break-after: auto; }
+    .page-break { border: none; padding-top: 0; }
+  }
+  @page { size: A4 portrait; margin: 12mm; }
+</style>
+</head>
+<body>
+<p id="loading">⏳ Conectando con Firebase...</p>
+
+<div id="contenido">
+  <div class="toolbar">
+    <div>
+      <h1>📋 Inventario de prendas</h1>
+      <p>Una hoja por dueña — completar antes de la feria</p>
+    </div>
+    <button class="btn-pdf" onclick="descargarPDF()">⬇️ Descargar PDF</button>
+  </div>
+  <div id="tablas-wrap"></div>
+</div>
+</body>
+</html>
