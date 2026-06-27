@@ -2,360 +2,412 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
-<title>Generador de etiquetas — Feria de ropa</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Etiquetas — Feria de ropa</title>
 <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: 'Inter', system-ui, sans-serif;
-    background: #FBF7F2;
-    color: #2C2416;
-    padding: 24px;
-  }
+  body { font-family: system-ui, sans-serif; background: #FBF7F2; color: #2C2416; padding: 24px; max-width: 700px; }
   h1 { font-size: 22px; margin-bottom: 4px; }
   p.sub { color: #7A6E62; font-size: 14px; margin-bottom: 24px; }
-
-  .controls {
-    display: flex; flex-wrap: wrap; gap: 12px;
-    background: #fff; border: 1px solid #E8E0D5;
-    border-radius: 12px; padding: 20px; margin-bottom: 24px;
-  }
-  .ctrl-group { display: flex; flex-direction: column; gap: 6px; }
-  .ctrl-group label { font-size: 12px; font-weight: 600; color: #7A6E62; letter-spacing: .5px; }
-  select, input[type=number] {
-    padding: 8px 12px; border-radius: 8px;
-    border: 1px solid #E8E0D5; background: #FBF7F2;
-    font-size: 14px; min-width: 140px;
-  }
-  .btn {
-    padding: 10px 20px; border-radius: 10px;
-    border: none; cursor: pointer;
-    font-weight: 600; font-size: 14px;
-  }
+  #loading { color: #7A6E62; font-size: 14px; margin: 20px 0; }
+  #app { display: none; }
+  .panel { background: #fff; border: 1px solid #E8E0D5; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  .panel h2 { font-size: 13px; font-weight: 700; color: #7A6E62; letter-spacing: .5px; margin-bottom: 14px; text-transform: uppercase; }
+  .fila { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+  .ctrl-group { display: flex; flex-direction: column; gap: 5px; }
+  .ctrl-group label { font-size: 11px; font-weight: 600; color: #7A6E62; letter-spacing: .5px; }
+  select, input[type=number] { padding: 8px 10px; border-radius: 8px; border: 1px solid #E8E0D5; background: #FBF7F2; font-size: 14px; }
+  select { min-width: 150px; }
+  input[type=number] { width: 100px; }
+  #variantes-container { display: none; margin-bottom: 14px; }
+  .variantes-lbl { font-size: 11px; font-weight: 600; color: #7A6E62; letter-spacing: .5px; margin-bottom: 8px; }
+  #variantes-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+  .variante-btn { padding: 6px 12px; border-radius: 20px; border: 1px solid #E8E0D5; background: #F0EAE1; color: #2C2416; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .variante-btn:hover { background: #2C2416; color: #fff; }
+  .rangos { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .rango { display: flex; align-items: center; gap: 10px; background: #F0EAE1; border-radius: 8px; padding: 8px 12px; }
+  .rango-lbl { font-size: 11px; font-weight: 700; color: #7A6E62; width: 52px; flex-shrink: 0; }
+  #error-msg { display: none; background: #FEE; border: 1px solid #C0392B; color: #C0392B; border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 12px; }
+  .btn { padding: 10px 20px; border-radius: 10px; border: none; cursor: pointer; font-weight: 600; font-size: 14px; }
+  .btn:disabled { opacity: 0.4; cursor: default; }
   .btn-primary { background: #2C2416; color: #fff; }
+  .btn-secondary { background: #F0EAE1; color: #2C2416; }
   .btn-print { background: #5A8FA3; color: #fff; }
-  .btn-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
-
-  /* ── PRINT SHEET ── */
-  #sheet {
-    display: none;
-  }
-
-  @media screen {
-    #preview-header {
-      display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: 16px;
-    }
-    #sheet {
-      display: block;
-      background: white;
-      border: 1px solid #E8E0D5;
-      border-radius: 12px;
-      padding: 16px;
-    }
-  }
-
-  .page {
-    width: 210mm;
-    min-height: 297mm;
-    margin: 0 auto 20px;
-    padding: 10mm;
-    background: white;
-    display: grid;
-    gap: 0;
-  }
-
-  /* Tamaño de etiqueta: ~62mm x 38mm — caben 3 columnas x 7 filas en A4 */
-  .label {
-    width: 62mm;
-    height: 40mm;
-    border: 1px dashed #ccc;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: space-between;
-    padding: 3mm 4mm 2mm;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .label-header {
-    width: 100%;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-  }
-
-  .label-duena {
-    font-size: 8pt;
-    font-weight: 700;
-    letter-spacing: .5px;
-    padding: 1px 5px;
-    border-radius: 3px;
-    color: white;
-  }
-
-  .label-cat {
-    font-size: 7pt;
-    color: #7A6E62;
-    font-weight: 600;
-    text-align: right;
-    line-height: 1.2;
-  }
-
-  .label-qr {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 1mm 0;
-  }
-
-  .label-qr canvas, .label-qr img {
-    width: 20mm !important;
-    height: 20mm !important;
-  }
-
-  .label-footer {
-    width: 100%;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-  }
-
-  .label-id {
-    font-size: 6pt;
-    color: #aaa;
-  }
-
-  .label-precio {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-  }
-
-  .precio-label {
-    font-size: 6pt;
-    color: #7A6E62;
-    margin-bottom: 1px;
-  }
-
-  .precio-valor {
-    font-size: 12pt;
-    font-weight: 700;
-    color: #2C2416;
-  }
-
-  .precio-blank {
-    width: 28mm;
-    height: 10mm;
-    border-bottom: 1.5px solid #2C2416;
-  }
-
-  .page-title {
-    text-align: center;
-    font-size: 9pt;
-    color: #7A6E62;
-    margin-bottom: 4mm;
-    letter-spacing: 1px;
-    font-weight: 600;
-  }
-
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+  .resumen-vacio { color: #7A6E62; font-size: 13px; text-align: center; padding: 16px 0; }
+  .resumen-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .resumen-contador { font-size: 20px; font-weight: 700; }
+  .resumen-contador.llena { color: #5A9E72; }
+  .resumen-disponible { font-size: 13px; color: #7A6E62; }
+  .tandas-lista { display: flex; flex-direction: column; gap: 8px; }
+  .tanda-item { display: flex; align-items: center; gap: 10px; background: #F0EAE1; border-radius: 8px; padding: 8px 12px; }
+  .tanda-inicial { font-size: 20px; font-weight: 900; width: 24px; flex-shrink: 0; }
+  .tanda-info { flex: 1; font-size: 13px; }
+  .tanda-precios { font-size: 11px; color: #7A6E62; margin-top: 2px; }
+  .btn-quitar { background: none; border: none; color: #C0392B; font-size: 18px; cursor: pointer; padding: 0 4px; flex-shrink: 0; }
+  #preview-section { display: none; margin-top: 24px; }
+  .preview-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  #sheet { background: white; border: 1px solid #E8E0D5; border-radius: 12px; padding: 16px; }
+  .page { width: 210mm; height: 297mm; margin: 0 auto; padding: 8mm; background: white; display: grid; grid-template-columns: repeat(3, 64mm); grid-template-rows: 5mm repeat(7, 39mm); overflow: hidden; }
+  .page-title { grid-column: 1 / -1; font-size: 6pt; color: #999; font-weight: 600; display: flex; align-items: center; padding-left: 2mm; }
+  .label { width: 64mm; height: 39mm; border: 0.3mm dashed #ccc; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 2mm 3mm; overflow: hidden; }
+  .label-header { width: 100%; display: flex; justify-content: space-between; align-items: flex-start; }
+  .label-inicial { font-size: 18pt; font-weight: 900; color: #000; line-height: 1; }
+  .label-cat { font-size: 7pt; color: #555; font-weight: 600; text-align: right; line-height: 1.2; }
+  .label-qr { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .label-qr img { width: 18mm !important; height: 18mm !important; }
+  .label-footer { width: 100%; display: flex; justify-content: space-between; align-items: flex-end; }
+  .label-id { font-size: 5.5pt; color: #bbb; }
+  .label-precio { display: flex; flex-direction: column; align-items: flex-end; }
+  .precio-label { font-size: 5.5pt; color: #777; }
+  .precio-valor { font-size: 16pt; font-weight: 700; color: #000; line-height: 1.1; }
   @media print {
-    body { background: white; padding: 0; }
-    .controls, #preview-header, h1, p.sub { display: none !important; }
+    body { background: white; padding: 0; margin: 0; max-width: none; }
+    h1, p.sub, #loading, #app, #preview-section > .preview-header { display: none !important; }
+    #preview-section { display: block !important; margin: 0; }
     #sheet { border: none !important; padding: 0 !important; border-radius: 0 !important; }
-    .page { margin: 0; page-break-after: always; }
+    .page { margin: 0; page-break-after: always; page-break-inside: avoid; }
     .page:last-child { page-break-after: auto; }
   }
+  @page { size: A4; margin: 0; }
 </style>
 </head>
 <body>
+<h1>🏷️ Etiquetas — Feria de ropa</h1>
+<p class="sub">Armá la hoja combinando tandas y generá cuando estés lista.</p>
+<p id="loading">⏳ Conectando con Firebase...</p>
 
-<h1>🏷️ Etiquetas para la feria</h1>
-<p class="sub">Generá una hoja por categoría y dueña. Imprimí en cartón fino si podés.</p>
+<div id="app">
+  <div class="panel">
+    <h2>Nueva tanda</h2>
+    <div class="fila">
+      <div class="ctrl-group"><label>DUEÑA</label><select id="sel-duena"></select></div>
+      <div class="ctrl-group"><label>CATEGORÍA</label><select id="sel-cat"></select></div>
+      <div class="ctrl-group"><label>NÚMERO INICIAL</label><input type="number" id="inp-start" value="1" min="1"/></div>
+    </div>
+    <div id="variantes-container">
+      <div class="variantes-lbl">PRECIOS DE REFERENCIA — clic para completar</div>
+      <div id="variantes-btns"></div>
+    </div>
+    <div class="rangos">
+      <div class="rango">
+        <span class="rango-lbl">Precio 1</span>
+        <div class="ctrl-group"><label>$ PRECIO</label><input type="number" id="precio-1" placeholder="ej: 40000" min="0"/></div>
+        <div class="ctrl-group"><label>CANTIDAD</label><input type="number" id="qty-1" value="7" min="0"/></div>
+      </div>
+      <div class="rango">
+        <span class="rango-lbl">Precio 2</span>
+        <div class="ctrl-group"><label>$ PRECIO</label><input type="number" id="precio-2" placeholder="opcional" min="0"/></div>
+        <div class="ctrl-group"><label>CANTIDAD</label><input type="number" id="qty-2" value="0" min="0"/></div>
+      </div>
+      <div class="rango">
+        <span class="rango-lbl">Precio 3</span>
+        <div class="ctrl-group"><label>$ PRECIO</label><input type="number" id="precio-3" placeholder="opcional" min="0"/></div>
+        <div class="ctrl-group"><label>CANTIDAD</label><input type="number" id="qty-3" value="0" min="0"/></div>
+      </div>
+    </div>
+    <div id="error-msg"></div>
+    <button class="btn btn-primary" id="btn-agregar">+ Agregar a la hoja</button>
+  </div>
 
-<div class="controls">
-  <div class="ctrl-group">
-    <label>DUEÑA</label>
-    <select id="sel-duena">
-      <option value="Vanessa">Vanessa</option>
-      <option value="Mariana">Mariana</option>
-    </select>
+  <div class="panel">
+    <h2>Contenido de la hoja</h2>
+    <div id="resumen-hoja"><p class="resumen-vacio">La hoja está vacía. Agregá tandas arriba.</p></div>
+    <div class="btn-row">
+      <button id="btn-generar" class="btn btn-primary" disabled>Generar hoja</button>
+      <button id="btn-vaciar" class="btn btn-secondary">Vaciar hoja</button>
+    </div>
   </div>
-  <div class="ctrl-group">
-    <label>CATEGORÍA</label>
-    <select id="sel-cat">
-      <option value="jeans|Jeans|20000">Jeans — $20.000</option>
-      <option value="pantalon|Pantalón|20000">Pantalón — $20.000</option>
-      <option value="short|Short|12000">Short — $12.000</option>
-      <option value="remera|Remera|8000">Remera — $8.000</option>
-      <option value="top|Top|8000">Top — $8.000</option>
-      <option value="sweater|Sweater|15000">Sweater — $15.000</option>
-      <option value="buzo|Buzo|15000">Buzo — $15.000</option>
-      <option value="bikini|Bikini|12000">Bikini — $12.000</option>
-      <option value="abrigo|Abrigo|25000">Abrigo — $25.000</option>
-      <option value="vestido|Vestido|18000">Vestido — $18.000</option>
-      <option value="zapatilla|Zapatilla|22000">Zapatilla — $22.000</option>
-      <option value="bota|Bota|25000">Bota — $25.000</option>
-      <option value="especial|Especial ✨|">Especial (precio libre)</option>
-    </select>
-  </div>
-  <div class="ctrl-group">
-    <label>CANTIDAD DE ETIQUETAS</label>
-    <input type="number" id="inp-qty" value="21" min="1" max="210" />
-  </div>
-  <div class="ctrl-group">
-    <label>NÚMERO INICIAL</label>
-    <input type="number" id="inp-start" value="1" min="1" />
-  </div>
-  <div class="btn-row">
-    <button class="btn btn-primary" onclick="generarHoja()">Generar hoja</button>
+</div>
+
+<div id="preview-section">
+  <div class="preview-header">
+    <strong id="preview-title"></strong>
     <button class="btn btn-print" onclick="window.print()">🖨️ Imprimir / PDF</button>
   </div>
+  <div id="sheet"></div>
 </div>
 
-<div id="preview-header" style="display:none">
-  <strong id="preview-title"></strong>
-  <button class="btn btn-print" onclick="window.print()">🖨️ Imprimir</button>
-</div>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-<div id="sheet"></div>
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyAEvubBsurEQrK-xgKhx5X74n_qJWHMdB0",
+    authDomain: "feria-ropa-d5cf7.firebaseapp.com",
+    projectId: "feria-ropa-d5cf7",
+    storageBucket: "feria-ropa-d5cf7.firebasestorage.app",
+    messagingSenderId: "794936729041",
+    appId: "1:794936729041:web:bf274e0ff7aeeaa9d314f0",
+  };
 
-<script>
-const DUENA_COLOR = { Vanessa: "#D4845A", Mariana: "#5A8FA3" };
-const COLS = 3;
-const ROWS_PER_PAGE = 7;
-const PER_PAGE = COLS * ROWS_PER_PAGE;
+  const app = initializeApp(FIREBASE_CONFIG);
+  const db = getFirestore(app);
 
-async function qrDataURL(text, size) {
-  return new Promise((resolve, reject) => {
-    QRCode.toDataURL(text, { width: size, margin: 1, errorCorrectionLevel: 'M' }, (err, url) => {
-      if (err) reject(err); else resolve(url);
-    });
-  });
-}
+  const PER_PAGE = 21;
+  let categorias = [];
+  let duenas = [];
+  let hoja = [];
 
-async function generarHoja() {
-  const duena = document.getElementById('sel-duena').value;
-  const catParts = document.getElementById('sel-cat').value.split('|');
-  const catId = catParts[0];
-  const catNombre = catParts[1];
-  const catPrecio = catParts[2] ? parseInt(catParts[2]) : null;
-  const qty = parseInt(document.getElementById('inp-qty').value);
-  const start = parseInt(document.getElementById('inp-start').value);
-  const color = DUENA_COLOR[duena];
-
-  const sheet = document.getElementById('sheet');
-  sheet.innerHTML = '';
-
-  const totalPages = Math.ceil(qty / PER_PAGE);
-
-  for (let p = 0; p < totalPages; p++) {
-    const page = document.createElement('div');
-    page.className = 'page';
-    page.style.gridTemplateColumns = `repeat(${COLS}, 62mm)`;
-
-    const titleDiv = document.createElement('div');
-    titleDiv.className = 'page-title';
-    titleDiv.style.gridColumn = `1 / -1`;
-    titleDiv.textContent = `${catNombre.toUpperCase()} — ${duena.toUpperCase()}`;
-    page.appendChild(titleDiv);
-
-    const pageStart = p * PER_PAGE;
-    const pageEnd = Math.min(pageStart + PER_PAGE, qty);
-
-    for (let i = pageStart; i < pageEnd; i++) {
-      const num = start + i;
-      const id = `${duena.charAt(0)}${catId.substring(0,3).toUpperCase()}${String(num).padStart(3,'0')}`;
-      // QR data: DUENA|catId|precio (o vacío si especial)
-      const qrData = `${duena}|${catId}|${catPrecio || ''}`;
-
-      const label = document.createElement('div');
-      label.className = 'label';
-
-      // Header
-      const header = document.createElement('div');
-      header.className = 'label-header';
-
-      const duenaSpan = document.createElement('span');
-      duenaSpan.className = 'label-duena';
-      duenaSpan.style.background = color;
-      duenaSpan.textContent = duena.toUpperCase();
-
-      const catSpan = document.createElement('span');
-      catSpan.className = 'label-cat';
-      catSpan.textContent = catNombre;
-
-      header.appendChild(duenaSpan);
-      header.appendChild(catSpan);
-      label.appendChild(header);
-
-      // QR
-      const qrDiv = document.createElement('div');
-      qrDiv.className = 'label-qr';
-      try {
-        const dataUrl = await qrDataURL(qrData, 80);
-        const img = document.createElement('img');
-        img.src = dataUrl;
-        qrDiv.appendChild(img);
-      } catch(e) {
-        qrDiv.textContent = '⚠️';
-      }
-      label.appendChild(qrDiv);
-
-      // Footer
-      const footer = document.createElement('div');
-      footer.className = 'label-footer';
-
-      const idSpan = document.createElement('span');
-      idSpan.className = 'label-id';
-      idSpan.textContent = id;
-
-      const precioDiv = document.createElement('div');
-      precioDiv.className = 'label-precio';
-
-      if (catPrecio) {
-        const lbl = document.createElement('div');
-        lbl.className = 'precio-label';
-        lbl.textContent = 'PRECIO';
-        const val = document.createElement('div');
-        val.className = 'precio-valor';
-        val.textContent = `$${catPrecio.toLocaleString('es-AR')}`;
-        precioDiv.appendChild(lbl);
-        precioDiv.appendChild(val);
-      } else {
-        const blank = document.createElement('div');
-        blank.className = 'precio-blank';
-        precioDiv.appendChild(blank);
-      }
-
-      footer.appendChild(idSpan);
-      footer.appendChild(precioDiv);
-      label.appendChild(footer);
-
-      page.appendChild(label);
+  // ── Firebase ──────────────────────────────────────────────────────────────
+  async function cargarDatos() {
+    try {
+      const [catSnap, duenasSnap] = await Promise.all([
+        getDoc(doc(db, "config", "categorias")),
+        getDoc(doc(db, "config", "duenas")),
+      ]);
+      categorias = catSnap.exists() ? catSnap.data().items || [] : [];
+      duenas = duenasSnap.exists() ? duenasSnap.data().items || [] : [];
+      poblarSelectores();
+      await actualizarNumeroInicio();
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("app").style.display = "block";
+    } catch(e) {
+      document.getElementById("loading").textContent = "Error: " + e.message;
     }
-
-    // Rellenar celdas vacías en la última página
-    const filled = pageEnd - pageStart;
-    for (let k = filled; k < PER_PAGE && p === totalPages - 1; k++) {
-      const empty = document.createElement('div');
-      empty.className = 'label';
-      empty.style.borderColor = 'transparent';
-      page.appendChild(empty);
-    }
-
-    sheet.appendChild(page);
   }
 
-  document.getElementById('preview-header').style.display = 'flex';
-  document.getElementById('preview-title').textContent =
-    `${qty} etiquetas · ${catNombre} · ${duena}`;
+  async function getContador(duena, catId) {
+    try {
+      const snap = await getDoc(doc(db, "contadores", `${duena}_${catId}`));
+      return snap.exists() ? snap.data().ultimo || 0 : 0;
+    } catch(e) { return 0; }
+  }
 
-  sheet.style.display = 'block';
-}
+  async function guardarContador(duena, catId, ultimo) {
+    try { await setDoc(doc(db, "contadores", `${duena}_${catId}`), { ultimo }); } catch(e) {}
+  }
+
+  async function actualizarNumeroInicio() {
+    const duena = document.getElementById("sel-duena")?.value;
+    const catId = document.getElementById("sel-cat")?.value;
+    if (!duena || !catId) return;
+    const ultimo = await getContador(duena, catId);
+    document.getElementById("inp-start").value = ultimo + 1;
+  }
+
+  // ── Selectores ────────────────────────────────────────────────────────────
+  function poblarSelectores() {
+    const selDuena = document.getElementById("sel-duena");
+    selDuena.innerHTML = duenas.map(d => `<option value="${d.nombre}">${d.nombre}</option>`).join("");
+    selDuena.onchange = actualizarNumeroInicio;
+
+    const selCat = document.getElementById("sel-cat");
+    selCat.innerHTML = categorias.map(c => `<option value="${c.id}">${c.nombre}</option>`).join("");
+    selCat.onchange = () => { actualizarNumeroInicio(); mostrarVariantes(); };
+    mostrarVariantes();
+  }
+
+  function mostrarVariantes() {
+    const catId = document.getElementById("sel-cat")?.value;
+    const cat = categorias.find(c => c.id === catId);
+    const container = document.getElementById("variantes-container");
+    const btns = document.getElementById("variantes-btns");
+    if (!cat?.variantes?.filter(v => v.precio).length) { container.style.display = "none"; return; }
+    container.style.display = "block";
+    btns.innerHTML = "";
+    cat.variantes.filter(v => v.precio).forEach(v => {
+      const btn = document.createElement("button");
+      btn.className = "variante-btn";
+      btn.textContent = `${v.nombre} $${v.precio.toLocaleString("es-AR")}`;
+      btn.onclick = () => {
+        for (let i = 1; i <= 3; i++) {
+          const el = document.getElementById(`precio-${i}`);
+          if (!el.value) { el.value = v.precio; break; }
+        }
+      };
+      btns.appendChild(btn);
+    });
+  }
+
+  function leerRangos() {
+    const rangos = [];
+    for (let i = 1; i <= 3; i++) {
+      const precio = parseInt(document.getElementById(`precio-${i}`).value);
+      const qty = parseInt(document.getElementById(`qty-${i}`).value) || 0;
+      if (!isNaN(precio) && precio > 0 && qty > 0) rangos.push({ precio, qty });
+    }
+    return rangos;
+  }
+
+  function totalHoja() { return hoja.reduce((s, t) => s + t.etiquetas.length, 0); }
+
+  // ── Agregar tanda ─────────────────────────────────────────────────────────
+  async function agregarTanda() {
+    const duenaNombre = document.getElementById("sel-duena").value;
+    const catId = document.getElementById("sel-cat").value;
+    const start = parseInt(document.getElementById("inp-start").value);
+    const rangos = leerRangos();
+    const cat = categorias.find(c => c.id === catId);
+
+    if (!cat || rangos.length === 0) { mostrarError("Ingresá al menos un precio con cantidad."); return; }
+
+    const cantTanda = rangos.reduce((s, r) => s + r.qty, 0);
+    const disponible = PER_PAGE - totalHoja();
+    if (cantTanda > disponible) { mostrarError(`Solo quedan ${disponible} espacios. Esta tanda tiene ${cantTanda}.`); return; }
+
+    const etiquetas = [];
+    let num = start;
+    for (const r of rangos) {
+      for (let i = 0; i < r.qty; i++) {
+        const id = `${duenaNombre.charAt(0)}${catId.substring(0,3).toUpperCase()}${String(num).padStart(3,"0")}`;
+        etiquetas.push({ duena: duenaNombre, catNombre: cat.nombre, catId, precio: r.precio, id, num });
+        num++;
+      }
+    }
+
+    hoja.push({ duena: duenaNombre, cat, rangos, etiquetas, nuevoUltimo: num - 1 });
+    limpiarError();
+    actualizarResumen();
+
+    for (let i = 1; i <= 3; i++) {
+      document.getElementById(`precio-${i}`).value = "";
+      document.getElementById(`qty-${i}`).value = i === 1 ? "7" : "0";
+    }
+    await actualizarNumeroInicio();
+  }
+
+  function vaciarHoja() { hoja = []; actualizarResumen(); }
+
+  function actualizarResumen() {
+    const total = totalHoja();
+    const div = document.getElementById("resumen-hoja");
+    const btn = document.getElementById("btn-generar");
+    if (hoja.length === 0) {
+      div.innerHTML = `<p class="resumen-vacio">La hoja está vacía. Agregá tandas arriba.</p>`;
+      btn.disabled = true;
+      return;
+    }
+    const disponible = PER_PAGE - total;
+    let html = `<div class="resumen-header">
+      <span class="resumen-contador ${total === PER_PAGE ? 'llena' : ''}">${total}/${PER_PAGE}</span>
+      <span class="resumen-disponible">${disponible > 0 ? `Quedan ${disponible} espacios` : "✓ Hoja completa"}</span>
+    </div><div class="tandas-lista">`;
+    hoja.forEach((t, i) => {
+      const preciosStr = t.rangos.map(r => `$${r.precio.toLocaleString("es-AR")} ×${r.qty}`).join(", ");
+      html += `<div class="tanda-item">
+        <span class="tanda-inicial">${t.duena.charAt(0)}</span>
+        <div class="tanda-info"><strong>${t.cat.nombre}</strong> · ${t.duena}
+          <div class="tanda-precios">${preciosStr} = ${t.etiquetas.length} etiquetas</div>
+        </div>
+        <button data-idx="${i}" class="btn-quitar">✕</button>
+      </div>`;
+    });
+    div.innerHTML = html + "</div>";
+    btn.disabled = false;
+
+    // Eventos de quitar tanda
+    div.querySelectorAll(".btn-quitar").forEach(btn => {
+      btn.onclick = () => { hoja.splice(parseInt(btn.dataset.idx), 1); actualizarResumen(); };
+    });
+  }
+
+  // ── QR + etiqueta ─────────────────────────────────────────────────────────
+  function qrDataURL(text) {
+    return new Promise((resolve, reject) => {
+      QRCode.toDataURL(text, { width: 80, margin: 1, errorCorrectionLevel: "M" }, (err, url) => {
+        if (err) reject(err); else resolve(url);
+      });
+    });
+  }
+
+  async function crearEtiqueta(e) {
+    const label = document.createElement("div");
+    label.className = "label";
+    const header = document.createElement("div");
+    header.className = "label-header";
+    const ini = document.createElement("span");
+    ini.className = "label-inicial";
+    ini.textContent = e.duena.charAt(0).toUpperCase();
+    const catSpan = document.createElement("span");
+    catSpan.className = "label-cat";
+    catSpan.textContent = e.catNombre;
+    header.appendChild(ini); header.appendChild(catSpan);
+    label.appendChild(header);
+
+    const qrDiv = document.createElement("div");
+    qrDiv.className = "label-qr";
+    try {
+      const img = document.createElement("img");
+      img.src = await qrDataURL(`${e.duena}|${e.catId}|${e.precio}|${e.id}`);
+      qrDiv.appendChild(img);
+    } catch(err) { qrDiv.textContent = "⚠️"; }
+    label.appendChild(qrDiv);
+
+    const footer = document.createElement("div");
+    footer.className = "label-footer";
+    const idSpan = document.createElement("span");
+    idSpan.className = "label-id";
+    idSpan.textContent = e.id;
+    const precioDiv = document.createElement("div");
+    precioDiv.className = "label-precio";
+    precioDiv.innerHTML = `<div class="precio-label">PRECIO</div><div class="precio-valor">$${e.precio.toLocaleString("es-AR")}</div>`;
+    footer.appendChild(idSpan); footer.appendChild(precioDiv);
+    label.appendChild(footer);
+    return label;
+  }
+
+  // ── Generar ───────────────────────────────────────────────────────────────
+  async function generarHoja() {
+    if (hoja.length === 0) return;
+    const btn = document.getElementById("btn-generar");
+    btn.disabled = true;
+    btn.textContent = "Generando...";
+
+    try {
+      const todasEtiquetas = hoja.flatMap(t => t.etiquetas);
+      const etiquetasDom = await Promise.all(todasEtiquetas.map(e => crearEtiqueta(e)));
+
+      const sheet = document.getElementById("sheet");
+      sheet.innerHTML = "";
+      const page = document.createElement("div");
+      page.className = "page";
+      const titleDiv = document.createElement("div");
+      titleDiv.className = "page-title";
+      titleDiv.style.gridColumn = "1 / -1";
+      titleDiv.textContent = hoja.map(t => `${t.duena.charAt(0)} ${t.cat.nombre}`).join(" · ");
+      page.appendChild(titleDiv);
+      etiquetasDom.forEach(el => page.appendChild(el));
+      for (let k = todasEtiquetas.length; k < PER_PAGE; k++) {
+        const empty = document.createElement("div");
+        empty.className = "label";
+        empty.style.borderColor = "transparent";
+        page.appendChild(empty);
+      }
+      sheet.appendChild(page);
+
+      for (const t of hoja) await guardarContador(t.duena, t.cat.id, t.nuevoUltimo);
+
+      document.getElementById("preview-section").style.display = "block";
+      document.getElementById("preview-title").textContent =
+        `${todasEtiquetas.length} etiquetas · ${hoja.length} tanda${hoja.length > 1 ? "s" : ""}`;
+
+      hoja = [];
+      actualizarResumen();
+      await actualizarNumeroInicio();
+    } catch(e) {
+      console.error(e);
+      document.getElementById("error-msg").textContent = "Error al generar: " + e.message;
+      document.getElementById("error-msg").style.display = "block";
+    }
+
+    btn.textContent = "Generar hoja";
+    btn.disabled = false;
+  }
+
+  function mostrarError(msg) {
+    const el = document.getElementById("error-msg");
+    el.textContent = msg; el.style.display = "block";
+  }
+  function limpiarError() { document.getElementById("error-msg").style.display = "none"; }
+
+  // ── Eventos via addEventListener (no onclick en HTML) ─────────────────────
+  document.getElementById("btn-agregar").addEventListener("click", agregarTanda);
+  document.getElementById("btn-generar").addEventListener("click", generarHoja);
+  document.getElementById("btn-vaciar").addEventListener("click", vaciarHoja);
+
+  cargarDatos();
 </script>
-
 </body>
 </html>
