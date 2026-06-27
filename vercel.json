@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/etiquetas", "destination": "/etiquetas.html" },
+    { "source": "/inventario", "destination": "/inventario.html" },
+    { "source": "/((?!api/.*).*)", "destination": "/index.html" }
+  ]
+}
