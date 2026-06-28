@@ -54,7 +54,7 @@
   .label { width: 64mm; height: 39mm; border: 0.3mm dashed #ccc; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 2mm 3mm; overflow: hidden; }
   .label-header { width: 100%; display: flex; justify-content: space-between; align-items: flex-start; }
   .label-inicial { font-size: 18pt; font-weight: 900; color: #000; line-height: 1; }
-  .label-cat { font-size: 7pt; color: #555; font-weight: 600; text-align: right; line-height: 1.2; }
+  .label-cat { font-size: 7pt; color: #555; font-weight: 600; text-align: right; line-height: 1.3; white-space: pre-line; }
   .label-qr { flex: 1; display: flex; align-items: center; justify-content: center; }
   .label-qr img { width: 18mm !important; height: 18mm !important; }
   .label-footer { width: 100%; display: flex; justify-content: space-between; align-items: flex-end; }
@@ -214,7 +214,7 @@
       btn.onclick = () => {
         for (let i = 1; i <= 3; i++) {
           const el = document.getElementById(`precio-${i}`);
-          if (!el.value) { el.value = v.precio; break; }
+          if (!el.value) { el.value = v.precio; el.dataset.variante = v.nombre; break; }
         }
       };
       btns.appendChild(btn);
@@ -224,9 +224,12 @@
   function leerRangos() {
     const rangos = [];
     for (let i = 1; i <= 3; i++) {
-      const precio = parseInt(document.getElementById(`precio-${i}`).value);
+      const el = document.getElementById(`precio-${i}`);
+      const precio = parseInt(el.value);
       const qty = parseInt(document.getElementById(`qty-${i}`).value) || 0;
-      if (!isNaN(precio) && precio > 0 && qty > 0) rangos.push({ precio, qty });
+      if (!isNaN(precio) && precio > 0 && qty > 0) {
+        rangos.push({ precio, qty, variante: el.dataset.variante || "" });
+      }
     }
     return rangos;
   }
@@ -252,7 +255,7 @@
     for (const r of rangos) {
       for (let i = 0; i < r.qty; i++) {
         const id = `${duenaNombre.charAt(0)}${catId.substring(0,3).toUpperCase()}${String(num).padStart(3,"0")}`;
-        etiquetas.push({ duena: duenaNombre, catNombre: cat.nombre, catId, precio: r.precio, id, num });
+        etiquetas.push({ duena: duenaNombre, catNombre: cat.nombre, catId, precio: r.precio, id, num, variante: r.variante || "" });
         num++;
       }
     }
@@ -262,7 +265,9 @@
     actualizarResumen();
 
     for (let i = 1; i <= 3; i++) {
-      document.getElementById(`precio-${i}`).value = "";
+      const el = document.getElementById(`precio-${i}`);
+      el.value = "";
+      delete el.dataset.variante;
       document.getElementById(`qty-${i}`).value = i === 1 ? "7" : "0";
     }
     await actualizarNumeroInicio();
@@ -322,7 +327,7 @@
     ini.textContent = e.duena.charAt(0).toUpperCase();
     const catSpan = document.createElement("span");
     catSpan.className = "label-cat";
-    catSpan.textContent = e.catNombre;
+    catSpan.textContent = e.variante ? `${e.catNombre}\n${e.variante}` : e.catNombre;
     header.appendChild(ini); header.appendChild(catSpan);
     label.appendChild(header);
 
