@@ -792,51 +792,52 @@ function TabResumen({ ventas, duenas, colorFor, db, isAdmin }) {
     }
   }
 
-  // ── Compensación ──
-  // Cada dueña ya "cobró" lo de sus transferencias (según quién vendió)
-  // El efectivo en caja se reparte según cuánto efectivo le corresponde a cada una
-  // Si lo que le toca en efectivo > lo que hay en caja: necesita transferencia extra
   const totalGeneral = Object.values(totalPorDuena).reduce((s, v) => s + v, 0);
 
-  // Para la compensación necesitamos saber cuánto efectivo cobró cada vendedor
-  // y cuánto le corresponde a cada dueña del efectivo
-  // Al cierre: dueña recibe efectivoPorDuena[d] en efectivo de caja
-  // + transferPorDuena[d] ya cobrado vía transferencia
-  // Total recibido = efectivoPorDuena[d] + transferPorDuena[d]
-  // Diferencia con lo que le corresponde = totalPorDuena[d] - efectivoPorDuena[d] - transferPorDuena[d]
-  // (debería ser 0 si todo cierra bien)
+  // ── Compensación ──
+  // Modelo: efectivo es caja común, transfers van a cuenta de quien cobró
+  // Al cierre:
+  //   Cada dueña tiene en su cuenta: transferPorVendedor[d] (lo que ella cobró por transfer)
+  //   De la caja común le corresponde: totalPorDuena[d] - transferPorVendedor[d]
+  //   Si efectivoTotal >= lo que le falta a todas → se reparte de caja, sin transfer extra
+  //   Si no alcanza → la que recibió más transfer de lo que le correspondía le transfiere a la otra
 
-  // Calculamos quién le debe a quién para compensar el efectivo
-  // Cada vendedor tiene en su bolsillo las transferencias que cobró
-  // El efectivo está en caja común → al cierre se reparte según efectivoPorDuena
-  // Si transferPorVendedor[vendedor] != transferPorDuena[dueña del vendedor] → hay diferencia
-
-  // Simplificado: al cierre de feria
-  // 1. Contar efectivo en caja → repartir según efectivoPorDuena
-  // 2. Cada una ya tiene sus transferencias (cobradas por ella misma o por la otra)
-  // 3. Calcular quién le debe a quién
-
-  // Saldo pendiente por dueña = lo que le corresponde - (efectivo que le toca + transfer ya cobradas por esa dueña como vendedora)
-  // Nota: transferPorVendedor usa el nombre del vendedor, no de la dueña
-  // Asumimos que cada vendedora cobra transferencias para sí misma
-  const pendientePorDuena = {};
+  const faltaPorDuena = {}; // cuánto efectivo necesita cada una de la caja
   duenas.forEach(d => {
-    const cobradoTransfer = transferPorVendedor[d.nombre] || 0;
-    const cobradoEfectivo = efectivoPorDuena[d.nombre] || 0;
-    pendientePorDuena[d.nombre] = totalPorDuena[d.nombre] - cobradoTransfer - cobradoEfectivo;
+    const yaEnCuenta = transferPorVendedor[d.nombre] || 0;
+    faltaPorDuena[d.nombre] = Math.max(0, (totalPorDuena[d.nombre] || 0) - yaEnCuenta);
   });
 
-  // Generar instrucción de compensación
+  const totalNecesitaDeCaja = Object.values(faltaPorDuena).reduce((s, v) => s + v, 0);
+
+  // Instrucción de reparto de caja
+  const repartoCaja = {};
+  duenas.forEach(d => { repartoCaja[d.nombre] = faltaPorDuena[d.nombre]; });
+
+  // Si el efectivo en caja no alcanza para cubrir lo que falta → alguien tiene exceso de transfer
   const compensacion = [];
-  const deudores = Object.entries(pendientePorDuena).filter(([, v]) => v < 0).map(([n, v]) => ({ nombre: n, monto: Math.abs(v) }));
-  const acreedores = Object.entries(pendientePorDuena).filter(([, v]) => v > 0).map(([n, v]) => ({ nombre: n, monto: v }));
-  for (const acreedor of acreedores) {
-    for (const deudor of deudores) {
-      if (acreedor.monto > 0 && deudor.monto > 0) {
-        const monto = Math.min(acreedor.monto, deudor.monto);
-        compensacion.push({ de: deudor.nombre, para: acreedor.nombre, monto });
-        acreedor.monto -= monto;
-        deudor.monto -= monto;
+  if (Math.round(totalNecesitaDeCaja) > Math.round(efectivoTotal) + 1) {
+    // Calculamos quién tiene exceso (cobró más transfer de lo que le correspondía)
+    const excesoPorDuena = {};
+    duenas.forEach(d => {
+      const yaEnCuenta = transferPorVendedor[d.nombre] || 0;
+      excesoPorDuena[d.nombre] = Math.max(0, yaEnCuenta - (totalPorDuena[d.nombre] || 0));
+    });
+    const deudores = duenas
+      .filter(d => excesoPorDuena[d.nombre] > 0)
+      .map(d => ({ nombre: d.nombre, monto: excesoPorDuena[d.nombre] }));
+    const acreedores = duenas
+      .filter(d => faltaPorDuena[d.nombre] > efectivoTotal / duenas.length)
+      .map(d => ({ nombre: d.nombre, monto: faltaPorDuena[d.nombre] - (repartoCaja[d.nombre] || 0) }));
+
+    for (const acreedor of acreedores) {
+      for (const deudor of deudores) {
+        if (acreedor.monto > 1 && deudor.monto > 1) {
+          const monto = Math.min(acreedor.monto, deudor.monto);
+          compensacion.push({ de: deudor.nombre, para: acreedor.nombre, monto, metodo: "transferencia" });
+          acreedor.monto -= monto;
+          deudor.monto -= monto;
+        }
       }
     }
   }
@@ -926,44 +927,56 @@ function TabResumen({ ventas, duenas, colorFor, db, isAdmin }) {
         <p style={{ fontSize: 11, color: C.inkLight, marginBottom: 12, fontWeight: 600, letterSpacing: 1 }}>ARQUEO DE CAJA</p>
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           <div style={{ flex: 1, background: C.tag, borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
-            <div style={{ fontSize: 11, color: C.inkLight, marginBottom: 2 }}>💵 EFECTIVO</div>
+            <div style={{ fontSize: 11, color: C.inkLight, marginBottom: 2 }}>💵 EFECTIVO EN CAJA</div>
             <div style={{ fontWeight: 700, fontSize: 18 }}>{fmt(efectivoTotal)}</div>
           </div>
           <div style={{ flex: 1, background: C.tag, borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
-            <div style={{ fontSize: 11, color: C.inkLight, marginBottom: 2 }}>📲 TRANSFER</div>
+            <div style={{ fontSize: 11, color: C.inkLight, marginBottom: 2 }}>📲 TRANSFERS COBRADAS</div>
             <div style={{ fontWeight: 700, fontSize: 18 }}>{fmt(totalGeneral - efectivoTotal)}</div>
           </div>
         </div>
-
-        <p style={{ fontSize: 11, color: C.inkLight, marginBottom: 8, fontWeight: 600 }}>DESGLOSE EFECTIVO EN CAJA</p>
+        <p style={{ fontSize: 11, color: C.inkLight, marginBottom: 8, fontWeight: 600 }}>TRANSFERS EN CUENTA DE CADA UNA</p>
         {duenas.map(d => (
-          <Row key={d.nombre} label={d.nombre} value={fmt(efectivoPorDuena[d.nombre] || 0)} color={colorFor(d.nombre, duenas)} bold />
+          <Row key={d.nombre} label={d.nombre} value={fmt(transferPorVendedor[d.nombre] || 0)} color={colorFor(d.nombre, duenas)} bold />
         ))}
-
         <div style={{ borderTop: `1px solid ${C.border}`, margin: "10px 0" }} />
-        <p style={{ fontSize: 11, color: C.inkLight, marginBottom: 8, fontWeight: 600 }}>TRANSFERENCIAS YA COBRADAS</p>
+        <p style={{ fontSize: 11, color: C.inkLight, marginBottom: 8, fontWeight: 600 }}>RECIBIR DE CAJA COMÚN</p>
         {duenas.map(d => (
-          <Row key={d.nombre} label={`${d.nombre} cobró`} value={fmt(transferPorVendedor[d.nombre] || 0)} color={colorFor(d.nombre, duenas)} />
+          <Row key={d.nombre} label={d.nombre} value={fmt(faltaPorDuena[d.nombre] || 0)} color={colorFor(d.nombre, duenas)} bold />
         ))}
       </Card>
 
       {/* ── Compensación al cierre ── */}
       <Card style={{ marginBottom: 12, border: `1px solid ${compensacion.length > 0 ? "#E67E22" : C.success}` }}>
-        <p style={{ fontSize: 11, color: C.inkLight, marginBottom: 12, fontWeight: 600, letterSpacing: 1 }}>COMPENSACIÓN AL CIERRE</p>
+        <p style={{ fontSize: 11, color: C.inkLight, marginBottom: 12, fontWeight: 600, letterSpacing: 1 }}>CIERRE DE CAJA</p>
         {compensacion.length === 0 ? (
-          <p style={{ color: C.success, fontWeight: 600, fontSize: 14 }}>✓ Todo está compensado con el efectivo en caja</p>
-        ) : (
-          compensacion.map((c, i) => (
-            <div key={i} style={{ background: "#FFF3E0", borderRadius: 10, padding: "12px 14px", marginBottom: 8 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>
-                <span style={{ color: colorFor(c.de, duenas) }}>{c.de}</span>
-                {" → "}
-                <span style={{ color: colorFor(c.para, duenas) }}>{c.para}</span>
+          <div>
+            <p style={{ color: C.success, fontWeight: 600, fontSize: 14, marginBottom: 8 }}>✓ Se resuelve todo con el efectivo en caja</p>
+            {duenas.map(d => (
+              <div key={d.nombre} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
+                <span style={{ color: colorFor(d.nombre, duenas), fontWeight: 600 }}>{d.nombre} retira de caja</span>
+                <span style={{ fontWeight: 700 }}>{fmt(faltaPorDuena[d.nombre] || 0)}</span>
               </div>
-              <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>{fmt(c.monto)}</div>
-              <div style={{ fontSize: 11, color: C.inkLight, marginTop: 2 }}>Transferencia o efectivo extra</div>
+            ))}
+          </div>
+        ) : (
+          <div>
+            <p style={{ color: "#E67E22", fontWeight: 600, fontSize: 13, marginBottom: 12 }}>El efectivo en caja no alcanza — necesitás una transferencia extra:</p>
+            {compensacion.map((c, i) => (
+              <div key={i} style={{ background: "#FFF3E0", borderRadius: 10, padding: "12px 14px", marginBottom: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, marginBottom: 4 }}>
+                  <span style={{ color: colorFor(c.de, duenas) }}>{c.de}</span> le transfiere a <span style={{ color: colorFor(c.para, duenas) }}>{c.para}</span>
+                </div>
+                <div style={{ fontSize: 22, fontWeight: 700 }}>{fmt(c.monto)}</div>
+              </div>
+            ))}
+            <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, marginTop: 4 }}>
+              <p style={{ fontSize: 11, color: C.inkLight, marginBottom: 6, fontWeight: 600 }}>MÁS LO QUE RETIRA CADA UNA DE CAJA:</p>
+              {duenas.map(d => (
+                <Row key={d.nombre} label={`${d.nombre} retira`} value={fmt(Math.min(faltaPorDuena[d.nombre] || 0, efectivoTotal))} color={colorFor(d.nombre, duenas)} />
+              ))}
             </div>
-          ))
+          </div>
         )}
       </Card>
 
