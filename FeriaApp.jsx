@@ -259,6 +259,7 @@ export default function FeriaApp() {
       tipo: "devolucion",
       fecha: new Date().toISOString().split("T")[0],
       timestamp: Date.now(),
+      hora: new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }),
       vendedor: usuario,
       metodo: metodoDev,
       prendaId: prenda.prendaId,
@@ -894,7 +895,7 @@ function TabResumen({ ventas, duenas, colorFor }) {
             <div>
               <span style={{ fontSize: 13, fontWeight: 600 }}>{fmt(v.totalFinal)}</span>
               {v.descuento > 0 && <span style={{ fontSize: 11, color: C.inkLight, marginLeft: 6 }}>(−{fmt(v.descuento)})</span>}
-              <div style={{ fontSize: 11, color: C.inkLight, marginTop: 2 }}>{v.metodo} · {v.vendedor} · {v.items?.length} prenda{v.items?.length !== 1 ? "s" : ""}</div>
+              <div style={{ fontSize: 11, color: C.inkLight, marginTop: 2 }}>{v.hora || ""} · {v.metodo} · {v.vendedor} · {v.items?.length} prenda{v.items?.length !== 1 ? "s" : ""}</div>
             </div>
             <div style={{ textAlign: "right" }}>
               {Object.entries(v.porDuena || {}).map(([d, m]) => (
