@@ -195,7 +195,7 @@ export default function FeriaApp() {
     const today = new Date().toISOString().split("T")[0];
     const q = query(collection(db, "ventas"), orderBy("timestamp", "desc"));
     return onSnapshot(q, snap => {
-      setVentas(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(v => v.fecha === today));
+      setVentas(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(v => v.fecha === today && !v.cerrada));
     });
   }, [db]);
 
