@@ -207,10 +207,15 @@ export default function FeriaApp() {
     const parts = data.split("|");
     if (parts.length < 2) { showToast("QR inválido", "err"); return; }
     const [duena, catId, precioStr, prendaId] = parts;
-    const cat = categorias.find(c => c.id === catId);
-    if (!cat) { showToast("Categoría no encontrada", "err"); return; }
     const precio = precioStr ? parseInt(precioStr) : null;
     if (!precio) { showToast("QR sin precio — usá modo manual", "warn"); return; }
+    // QR genérico
+    if (catId === "generica") {
+      agregarAlCarrito(duena, { nombre: "Genérica", id: "generica" }, precio, "GEN-" + Date.now());
+      return;
+    }
+    const cat = categorias.find(c => c.id === catId);
+    if (!cat) { showToast("Categoría no encontrada", "err"); return; }
     // Verificar que no esté ya en el carrito
     if (prendaId && carrito.find(i => i.prendaId === prendaId)) {
       showToast("Esta prenda ya está en el carrito", "warn"); return;
