@@ -1074,5 +1074,79 @@ function TabAdmin({ adminTab, setAdminTab, categorias, setCategorias, descuentos
                     <button onClick={() => { const n = [...localCats]; n[i].variantes = n[i].variantes.filter((_, k) => k !== j); setLocalCats(n); }} style={{ background: "none", border: "none", color: C.danger, fontSize: 16, cursor: "pointer" }}>✕</button>
                   </div>
                 ))}
-                <button onClick={() => { const n = [...localCats]; if (!n[i].variantes) n[i].variantes = []; n[i].variantes.push({ nombre: "", precio: null }); setLocalCats(n); }} style={{ fontSize: 12, color: C.inkLight, background: "none", border: `1px dashed ${C.border}`, borderRadius: 6, padding: "4px 1
+                <button onClick={() => { const n = [...localCats]; if (!n[i].variantes) n[i].variantes = []; n[i].variantes.push({ nombre: "", precio: null }); setLocalCats(n); }} style={{ fontSize: 12, color: C.inkLight, background: "none", border: `1px dashed ${C.border}`, borderRadius: 6, padding: "4px 10px", cursor: "pointer", marginTop: 2 }}>
+                  + variante
+                </button>
+              </div>
+            </Card>
+          ))}
+          <button onClick={() => setLocalCats(c => [...c, { id: `cat_${Date.now()}`, nombre: "", variantes: [{ nombre: "Estándar", precio: null }, { nombre: "Premium", precio: null }, { nombre: "Nuevo", precio: null }] }])} style={{ width: "100%", padding: "10px 0", background: "none", border: `1px dashed ${C.border}`, borderRadius: 10, color: C.inkLight, fontSize: 13, cursor: "pointer", marginBottom: 12 }}>+ Agregar categoría</button>
+          <Btn onClick={() => save("categorias", localCats, setCategorias)} style={{ width: "100%" }}>Guardar categorías</Btn>
+        </>
+      )}
 
+      {/* DESCUENTOS */}
+      {adminTab === "descuentos" && (
+        <>
+          <p style={{ fontSize: 13, color: C.inkLight, marginBottom: 12 }}>Descuento automático según cantidad de prendas en una compra.</p>
+          {localDesc.map((row, i) => (
+            <Card key={i} style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 13, color: C.inkLight, flexShrink: 0 }}>Desde</span>
+              <input type="number" value={row.cantidad} onChange={e => { const n = [...localDesc]; n[i] = { ...n[i], cantidad: parseInt(e.target.value) }; setLocalDesc(n); }} style={{ ...inputStyle, width: 60, textAlign: "center" }} />
+              <span style={{ fontSize: 13, color: C.inkLight, flexShrink: 0 }}>prendas →</span>
+              <input type="number" value={row.porcentaje} onChange={e => { const n = [...localDesc]; n[i] = { ...n[i], porcentaje: parseInt(e.target.value) }; setLocalDesc(n); }} style={{ ...inputStyle, width: 60, textAlign: "center" }} />
+              <span style={{ fontSize: 13, color: C.inkLight }}>%</span>
+              <button onClick={() => setLocalDesc(d => d.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: C.danger, fontSize: 20, cursor: "pointer" }}>✕</button>
+            </Card>
+          ))}
+          <button onClick={() => setLocalDesc(d => [...d, { cantidad: 2, porcentaje: 0 }])} style={{ width: "100%", padding: "10px 0", background: "none", border: `1px dashed ${C.border}`, borderRadius: 10, color: C.inkLight, fontSize: 13, cursor: "pointer", marginBottom: 12 }}>+ Agregar escala</button>
+          <Btn onClick={() => save("descuentos", localDesc, setDescuentos)} style={{ width: "100%" }}>Guardar descuentos</Btn>
+        </>
+      )}
+
+      {/* DUEÑAS */}
+      {adminTab === "duenas" && (
+        <>
+          <p style={{ fontSize: 13, color: C.inkLight, marginBottom: 12 }}>Las dueñas de las prendas. La recaudación se divide entre ellas.</p>
+          {localDuenas.map((d, i) => (
+            <Card key={i} style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+              <input value={d.nombre} placeholder="Nombre" onChange={e => { const n = [...localDuenas]; n[i] = { ...n[i], nombre: e.target.value }; setLocalDuenas(n); }} style={{ ...inputStyle, flex: 1 }} />
+              <div style={{ display: "flex", gap: 4 }}>
+                {COLORS.map(col => (
+                  <button key={col} onClick={() => { const n = [...localDuenas]; n[i] = { ...n[i], color: col }; setLocalDuenas(n); }} style={{ width: 24, height: 24, borderRadius: "50%", background: col, border: d.color === col ? "3px solid #2C2416" : "2px solid transparent", cursor: "pointer" }} />
+                ))}
+              </div>
+              <button onClick={() => setLocalDuenas(x => x.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: C.danger, fontSize: 20, cursor: "pointer" }}>✕</button>
+            </Card>
+          ))}
+          <button onClick={() => setLocalDuenas(x => [...x, { nombre: "", color: COLORS[0] }])} style={{ width: "100%", padding: "10px 0", background: "none", border: `1px dashed ${C.border}`, borderRadius: 10, color: C.inkLight, fontSize: 13, cursor: "pointer", marginBottom: 12 }}>+ Agregar dueña</button>
+          <Btn onClick={() => save("duenas", localDuenas, setDuenas)} style={{ width: "100%" }}>Guardar dueñas</Btn>
+        </>
+      )}
+
+      {/* VENDEDORES */}
+      {adminTab === "usuarios" && (
+        <>
+          <p style={{ fontSize: 13, color: C.inkLight, marginBottom: 12 }}>Las personas que van a operar la app el día de la feria.</p>
+          {localUsers.map((u, i) => (
+            <Card key={i} style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+              <input value={u.nombre} placeholder="Nombre" onChange={e => { const n = [...localUsers]; n[i] = { ...n[i], nombre: e.target.value }; setLocalUsers(n); }} style={{ ...inputStyle, flex: 1 }} />
+              <div style={{ display: "flex", gap: 4 }}>
+                {COLORS.map(col => (
+                  <button key={col} onClick={() => { const n = [...localUsers]; n[i] = { ...n[i], color: col }; setLocalUsers(n); }} style={{ width: 24, height: 24, borderRadius: "50%", background: col, border: u.color === col ? "3px solid #2C2416" : "2px solid transparent", cursor: "pointer" }} />
+                ))}
+              </div>
+              <label style={{ fontSize: 12, color: C.inkLight, display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                <input type="checkbox" checked={u.admin || false} onChange={e => { const n = [...localUsers]; n[i] = { ...n[i], admin: e.target.checked }; setLocalUsers(n); }} />
+                Admin
+              </label>
+              <button onClick={() => setLocalUsers(x => x.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: C.danger, fontSize: 20, cursor: "pointer" }}>✕</button>
+            </Card>
+          ))}
+          <button onClick={() => setLocalUsers(x => [...x, { nombre: "", color: COLORS[1], admin: false }])} style={{ width: "100%", padding: "10px 0", background: "none", border: `1px dashed ${C.border}`, borderRadius: 10, color: C.inkLight, fontSize: 13, cursor: "pointer", marginBottom: 12 }}>+ Agregar vendedor/a</button>
+          <Btn onClick={() => save("usuarios", localUsers, setUsuarios)} style={{ width: "100%" }}>Guardar vendedores</Btn>
+        </>
+      )}
+    </div>
+  );
+}
