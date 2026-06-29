@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Etiquetas genéricas — Feria de ropa</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyAEvubBsurEQrK-xgKhx5X74n_qJWHMdB0",
+    authDomain: "feria-ropa-d5cf7.firebaseapp.com",
+    projectId: "feria-ropa-d5cf7",
+    storageBucket: "feria-ropa-d5cf7.firebasestorage.app",
+    messagingSenderId: "794936729041",
+    appId: "1:794936729041:web:bf274e0ff7aeeaa9d314f0",
+  };
+
+  const PRECIOS = [5000, 8000, 10000, 15000, 20000, 25000, 35000, 50000, 60000, 70000, 80000, 90000, 100000, 110000, 120000, 130000, 140000, 150000];
+
+  const app = initializeApp(FIREBASE_CONFIG);
+  const db = getFirestore(app);
+
+  async function cargar() {
+    try {
+      const duenasSnap = await getDoc(doc(db, "config", "duenas"));
+      const duenas = duenasSnap.exists() ? duenasSnap.data().items || [] : [];
+      await generarHojas(duenas);
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("contenido").style.display = "block";
+    } catch(e) {
+      document.getElementById("loading").textContent = "Error: " + e.message;
+    }
+  }
+
+  function qrDataURL(text) {
+    return new Promise((resolve, reject) => {
+      QRCode.toDataURL(text, { width: 120, margin: 1, errorCorrectionLevel: "M" }, (err, url) => {
+        if (err) reject(err); else resolve(url);
+      });
+    });
+  }
+
+  async function generarHojas(duenas) {
+    const wrap = document.getElementById("hojas");
+    wrap.innerHTML = "";
+
+    for (const [di, duena] of duenas.entries()) {
+      const hoja = document.createElement("div");
+      hoja.className = "hoja" + (di > 0 ? " page-break" : "");
+
+      // Header con nombre grande
+      const header = document.createElement("div");
+      header.className = "hoja-header";
+      header.style.background = duena.color || "#2C2416";
+      header.innerHTML = `<span class="hoja-nombre">${duena.nombre.toUpperCase()}</span><span class="hoja-sub">Etiquetas de precio — Feria de ropa</span>`;
+      hoja.appendChild(header);
+
+      // Grid de precios
+      const grid = document.createElement("div");
+      grid.className = "precios-grid";
+
+      const qrUrls = await Promise.all(
+        PRECIOS.map(p => qrDataURL(`${duena.nombre}|generica|${p}|GEN`))
+      );
+
+      PRECIOS.forEach((precio, i) => {
+        const item = document.createElement("div");
+        item.className = "precio-item";
+
+        const qrDiv = document.createElement("div");
+        qrDiv.className = "precio-qr";
+        const img = document.createElement("img");
+        img.src = qrUrls[i];
+        qrDiv.appendChild(img);
+
+        const label = document.createElement("div");
+        label.className = "precio-label";
+        label.textContent = `$${precio.toLocaleString("es-AR")}`;
+
+        item.appendChild(qrDiv);
+        item.appendChild(label);
+        grid.appendChild(item);
+      });
+
+      hoja.appendChild(grid);
+      wrap.appendChild(hoja);
+    }
+  }
+
+  cargar();
+</script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #FBF7F2; color: #2C2416; padding: 24px; }
+  #loading { color: #7A6E62; font-size: 14px; padding: 40px; }
+  #contenido { display: none; }
+
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+  .toolbar h1 { font-size: 22px; font-weight: 700; }
+  .toolbar p { font-size: 13px; color: #7A6E62; margin-top: 2px; }
+  .btn-print { padding: 12px 24px; background: #2C2416; color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; }
+
+  .hoja {
+    width: 210mm;
+    min-height: 297mm;
+    background: white;
+    margin: 0 auto 32px;
+    border: 1px solid #E8E0D5;
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .page-break { page-break-before: always; }
+
+  .hoja-header {
+    padding: 14mm 12mm 10mm;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .hoja-nombre {
+    font-size: 36pt;
+    font-weight: 900;
+    color: white;
+    letter-spacing: 2px;
+    line-height: 1;
+  }
+  .hoja-sub {
+    font-size: 10pt;
+    color: rgba(255,255,255,0.75);
+    letter-spacing: 1px;
+  }
+
+  .precios-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    flex: 1;
+    padding: 8mm 10mm;
+  }
+
+  .precio-item {
+    display: flex;
+    align-items: center;
+    gap: 8mm;
+    padding: 6mm 4mm;
+    border-bottom: 0.3mm solid #E8E0D5;
+  }
+  .precio-item:nth-child(3n+1) { border-right: 0.3mm solid #E8E0D5; }
+  .precio-item:nth-child(3n+2) { border-right: 0.3mm solid #E8E0D5; }
+
+  .precio-qr img {
+    width: 22mm;
+    height: 22mm;
+    display: block;
+    flex-shrink: 0;
+  }
+
+  .precio-label {
+    font-size: 15pt;
+    font-weight: 900;
+    color: #2C2416;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  @media print {
+    body { background: white; padding: 0; }
+    .toolbar { display: none; }
+    .hoja { border: none; border-radius: 0; margin: 0; box-shadow: none; }
+    .page-break { page-break-before: always; }
+  }
+  @page { size: A4 portrait; margin: 0; }
+</style>
+</head>
+<body>
+<p id="loading">⏳ Generando etiquetas...</p>
+
+<div id="contenido">
+  <div class="toolbar">
+    <div>
+      <h1>🏷️ Etiquetas genéricas</h1>
+      <p>Una hoja por vendedora — para prendas sin etiqueta</p>
+    </div>
+    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / PDF</button>
+  </div>
+  <div id="hojas"></div>
+</div>
+</body>
+</html>
